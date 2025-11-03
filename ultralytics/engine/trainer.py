@@ -167,6 +167,7 @@ class BaseTrainer:
 
         # Epoch level metrics
         self.best_fitness = None
+        self.best_epoch = 0
         self.fitness = None
         self.loss = None
         self.tloss = None
@@ -331,6 +332,7 @@ class BaseTrainer:
         self.ema = ModelEMA(self.model)
         if RANK in {-1, 0}:
             metric_keys = self.validator.metrics.keys + self.label_loss_items(prefix="val")
+            metric_keys.append("best_epoch")
             self.metrics = dict(zip(metric_keys, [0] * len(metric_keys)))
             if self.args.plots:
                 self.plot_training_labels()
@@ -517,6 +519,8 @@ class BaseTrainer:
         # Do final val with best.pt
         self.final_eval()
         if RANK in {-1, 0}:
+            best_epoch_msg = self.best_epoch if self.best_epoch else "N/A"
+            LOGGER.info(f"Best model saved as {self.best} at epoch {best_epoch_msg}.")
             if self.args.plots:
                 self.plot_metrics()
             self.run_callbacks("on_train_end")
@@ -588,6 +592,7 @@ class BaseTrainer:
             {
                 "epoch": self.epoch,
                 "best_fitness": self.best_fitness,
+                "best_epoch": self.best_epoch,
                 "model": None,  # resume and final checkpoints derive from EMA
                 "ema": deepcopy(unwrap_model(self.ema.ema)).half(),
                 "updates": self.ema.updates,
@@ -707,6 +712,8 @@ class BaseTrainer:
         fitness = metrics.pop("fitness", -self.loss.detach().cpu().numpy())  # use loss as fitness measure if not found
         if not self.best_fitness or self.best_fitness < fitness:
             self.best_fitness = fitness
+            self.best_epoch = getattr(self, "epoch", -1) + 1
+        metrics["best_epoch"] = self.best_epoch
         return metrics, fitness
 
     def get_model(self, cfg=None, weights=None, verbose=True):
@@ -789,6 +796,7 @@ class BaseTrainer:
             self.validator.args.compile = False  # disable final val compile as too slow
             self.metrics = self.validator(model=model)
             self.metrics.pop("fitness", None)
+            self.metrics["best_epoch"] = self.best_epoch
             self.run_callbacks("on_fit_epoch_end")
 
     def check_resume(self, overrides):
@@ -834,6 +842,7 @@ class BaseTrainer:
             self.ema.ema.load_state_dict(ckpt["ema"].float().state_dict())
             self.ema.updates = ckpt["updates"]
         self.best_fitness = ckpt.get("best_fitness", 0.0)
+        self.best_epoch = ckpt.get("best_epoch", self.best_epoch)
 
     def _handle_nan_recovery(self, epoch):
         """Detect and recover from NaN/Inf loss and fitness collapse by loading last checkpoint."""
