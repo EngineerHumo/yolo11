@@ -52,7 +52,12 @@ def parse_args() -> argparse.Namespace:
 def find_samples(source: Path) -> list[Path]:
     if not source.exists():
         raise FileNotFoundError(f"Source directory does not exist: {source}")
-    bmp_files = sorted(source.glob("*.bmp"))
+
+    bmp_files: list[Path] = []
+    for pattern in ("*.bmp", "*.BMP"):
+        bmp_files.extend(source.glob(pattern))
+    bmp_files = sorted({p.resolve(): p for p in bmp_files}.values(), key=lambda p: p.name)
+
     if not bmp_files:
         logging.warning("No BMP files were found in %s", source)
     return bmp_files
@@ -118,6 +123,24 @@ def _compute_box(points: Iterable[Any]) -> tuple[float, float, float, float] | N
     return x_center, y_center, width, height
 
 
+def _iter_spots(payload: dict[str, Any]) -> Iterable[tuple[str, Iterable[Any]]]:
+    spots = payload.get("spots") or payload.get("spot") or payload.get("annotations")
+    if isinstance(spots, Iterable) and not isinstance(spots, (str, bytes)):
+        for spot in spots:
+            if isinstance(spot, dict):
+                yield str(spot.get("label", "")).strip(), spot.get("points", [])
+        return
+
+    shapes = payload.get("shapes")
+    if isinstance(shapes, Iterable):
+        for shape in shapes:
+            if not isinstance(shape, dict):
+                continue
+            label = str(shape.get("label", "")).strip()
+            points = shape.get("points", [])
+            yield label, points
+
+
 def convert_annotations(json_path: Path, image_size: int) -> list[str]:
     if not json_path.exists():
         logging.debug("Annotation file missing for %s", json_path)
@@ -129,22 +152,34 @@ def convert_annotations(json_path: Path, image_size: int) -> list[str]:
         logging.warning("Failed to parse JSON %s: %s", json_path, exc)
         return []
 
-    spots = payload.get("spots") or payload.get("spot") or payload.get("annotations") or []
     lines: list[str] = []
-    for spot in spots:
-        label = str(spot.get("label", "")).strip()
+    width = payload.get("imageWidth")
+    height = payload.get("imageHeight")
+    try:
+        width_val = float(width) if width else None
+    except (TypeError, ValueError):
+        width_val = None
+    try:
+        height_val = float(height) if height else None
+    except (TypeError, ValueError):
+        height_val = None
+
+    norm_w = width_val or float(image_size)
+    norm_h = height_val or float(image_size)
+
+    for label, points in _iter_spots(payload):
         if label not in LABEL_MAP:
             logging.debug("Skipping unknown label '%s' in %s", label, json_path)
             continue
-        box = _compute_box(spot.get("points", []))
+        box = _compute_box(points)
         if not box:
             logging.debug("Skipping spot with invalid points in %s", json_path)
             continue
         x_c, y_c, width, height = box
-        x_c /= image_size
-        y_c /= image_size
-        width /= image_size
-        height /= image_size
+        x_c /= norm_w
+        y_c /= norm_h
+        width /= norm_w
+        height /= norm_h
         x_c = max(0.0, min(1.0, x_c))
         y_c = max(0.0, min(1.0, y_c))
         width = max(0.0, min(1.0, width))
