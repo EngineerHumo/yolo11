@@ -224,9 +224,15 @@ def add_integration_callbacks(instance):
         from .neptune import callbacks as neptune_cb
         from .raytune import callbacks as tune_cb
         from .tensorboard import callbacks as tb_cb
+        from .visdom import callbacks as visdom_cb
         from .wb import callbacks as wb_cb
 
-        callbacks_list.extend([clear_cb, comet_cb, dvc_cb, mlflow_cb, neptune_cb, tune_cb, tb_cb, wb_cb])
+        callbacks_list.extend([clear_cb, comet_cb, dvc_cb, mlflow_cb, neptune_cb, tune_cb, tb_cb, visdom_cb, wb_cb])
+
+    if "Validator" in instance.__class__.__name__:
+        from .visdom import callbacks as visdom_cb
+
+        callbacks_list.append(visdom_cb)
 
     # Add the callbacks to the callbacks dictionary
     for callbacks in callbacks_list:
