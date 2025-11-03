@@ -1298,7 +1298,7 @@ class SettingsManager(JSONDict):
         /new/runs/dir
     """
 
-    def __init__(self, file=SETTINGS_FILE, version="0.0.6"):
+    def __init__(self, file=SETTINGS_FILE, version="0.0.7"):
         """Initialize the SettingsManager with default settings and load user settings."""
         import hashlib
         import uuid
@@ -1327,6 +1327,12 @@ class SettingsManager(JSONDict):
             "neptune": True,  # Neptune integration
             "raytune": True,  # Ray Tune integration
             "tensorboard": False,  # TensorBoard logging
+            "visdom": False,  # Visdom logging
+            "visdom_env": "ultralytics",  # Visdom environment name
+            "visdom_server": "http://localhost",  # Visdom server URL
+            "visdom_port": 8097,  # Visdom server port
+            "visdom_username": "",  # Visdom authentication username
+            "visdom_password": "",  # Visdom authentication password
             "wandb": False,  # Weights & Biases logging
             "vscode_msg": True,  # VSCode message
             "openvino_msg": True,  # OpenVINO export on Intel CPU message
