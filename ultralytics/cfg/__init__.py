@@ -351,8 +351,15 @@ def check_cfg(cfg: dict, hard: bool = True) -> None:
         - None values are ignored as they may be from optional arguments.
         - Fraction keys are checked to be within the range [0.0, 1.0].
     """
-    for k, v in cfg.items():
+    for k, v in list(cfg.items()):
         if v is not None:  # None values may be from optional args
+            if k == "scale" and isinstance(v, str):
+                try:
+                    cfg[k] = float(v)
+                except ValueError:
+                    cfg["model_scale"] = v
+                    cfg[k] = DEFAULT_CFG_DICT.get("scale", 0.5)
+                    continue  # allow non-numeric scale strings like 'n', 's', 'm', 'l', 'x'
             if k in CFG_FLOAT_KEYS and not isinstance(v, FLOAT_OR_INT):
                 if hard:
                     raise TypeError(
