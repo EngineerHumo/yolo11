@@ -866,6 +866,8 @@ class Metric(SimpleClass):
         self.p = []  # (nc, )
         self.r = []  # (nc, )
         self.r50 = []  # (nc, )
+        self.r_conf40 = []  # (nc, )
+        self.p_conf40 = []  # (nc, )
         self.f1 = []  # (nc, )
         self.all_ap = []  # (nc, 10)
         self.ap_class_index = []  # (nc, )
@@ -913,6 +915,16 @@ class Metric(SimpleClass):
         return self.r50.mean() if len(self.r50) else 0.0
 
     @property
+    def mr_conf40(self) -> float:
+        """Return the mean recall at IoU 0.5 when confidence is fixed to 0.4."""
+        return self.r_conf40.mean() if len(self.r_conf40) else 0.0
+
+    @property
+    def mp_conf40(self) -> float:
+        """Return the mean precision at IoU 0.5 when confidence is fixed to 0.4."""
+        return self.p_conf40.mean() if len(self.p_conf40) else 0.0
+
+    @property
     def map50(self) -> float:
         """Return the mean Average Precision (mAP) at an IoU threshold of 0.5.
 
@@ -940,12 +952,12 @@ class Metric(SimpleClass):
         return self.all_ap.mean() if len(self.all_ap) else 0.0
 
     def mean_results(self) -> list[float]:
-        """Return mean of results: mp, mr, mr@0.5, map50, map."""
-        return [self.mp, self.mr, self.mr50, self.map50, self.map]
+        """Return mean of results including precision/recall at confidence 0.4."""
+        return [self.mp, self.mr, self.mp_conf40, self.mr_conf40, self.map50, self.map]
 
-    def class_result(self, i: int) -> tuple[float, float, float, float, float]:
-        """Return class-aware result containing precision, recall, recall@0.5, AP50, and AP50-95."""
-        return self.p[i], self.r[i], self.r50[i], self.ap50[i], self.ap[i]
+    def class_result(self, i: int) -> tuple[float, float, float, float, float, float]:
+        """Return class-aware result including precision/recall at confidence 0.4 along with AP metrics."""
+        return self.p[i], self.r[i], self.p_conf40[i], self.r_conf40[i], self.ap50[i], self.ap[i]
 
     @property
     def maps(self) -> np.ndarray:
@@ -957,7 +969,7 @@ class Metric(SimpleClass):
 
     def fitness(self) -> float:
         """Return model fitness as a weighted combination of metrics."""
-        w = [0.0, 0.0, 0.0, 0.0, 1.0]  # weights for [P, R, R@0.5, mAP@0.5, mAP@0.5:0.95]
+        w = [0.0, 0.0, 0.0, 0.0, 0.0, 1.0]  # weights for [P, R, P@0.4, R@0.4, mAP@0.5, mAP@0.5:0.95]
         return (np.nan_to_num(np.array(self.mean_results())) * w).sum()
 
     def update(self, results: tuple):
@@ -989,6 +1001,12 @@ class Metric(SimpleClass):
             self.prec_values,
         ) = results
         self.r50 = self.r_curve.max(1) if len(self.r_curve) else []
+        if len(self.p_curve):
+            idx = int(np.clip(np.searchsorted(self.px, 0.4, side="left"), 0, len(self.px) - 1))
+            self.r_conf40 = self.r_curve[:, idx]
+            self.p_conf40 = self.p_curve[:, idx]
+        else:
+            self.r_conf40, self.p_conf40 = np.array([]), np.array([])
 
     @property
     def curves(self) -> list:
@@ -1101,17 +1119,18 @@ class DetMetrics(SimpleClass, DataExportMixin):
         return [
             "metrics/precision(B)",
             "metrics/recall(B)",
-            "metrics/recall50(B)",
+            "metrics/precision@0.4(B)",
+            "metrics/recall@0.4(B)",
             "metrics/mAP50(B)",
             "metrics/mAP50-95(B)",
         ]
 
     def mean_results(self) -> list[float]:
-        """Calculate mean metrics & return precision, recall, recall@0.5, mAP50, and mAP50-95."""
+        """Calculate mean metrics & return precision, recall, precision@0.4, recall@0.4, mAP50, and mAP50-95."""
         return self.box.mean_results()
 
-    def class_result(self, i: int) -> tuple[float, float, float, float, float]:
-        """Return the result of evaluating the performance of an object detection model on a specific class."""
+    def class_result(self, i: int) -> tuple[float, float, float, float, float, float]:
+        """Return per-class detection metrics including precision/recall at confidence 0.4 and mAP scores."""
         return self.box.class_result(i)
 
     @property
@@ -1166,7 +1185,8 @@ class DetMetrics(SimpleClass, DataExportMixin):
         per_class = {
             "Box-P": self.box.p,
             "Box-R": self.box.r,
-            "Box-R@50": self.box.r50,
+            "Box-P@0.4": self.box.p_conf40,
+            "Box-R@0.4": self.box.r_conf40,
             "Box-F1": self.box.f1,
         }
         return [
@@ -1175,8 +1195,8 @@ class DetMetrics(SimpleClass, DataExportMixin):
                 "Images": self.nt_per_image[self.ap_class_index[i]],
                 "Instances": self.nt_per_class[self.ap_class_index[i]],
                 **{k: round(v[i], decimals) for k, v in per_class.items()},
-                "mAP50": round(self.class_result(i)[3], decimals),
-                "mAP50-95": round(self.class_result(i)[4], decimals),
+                "mAP50": round(self.class_result(i)[4], decimals),
+                "mAP50-95": round(self.class_result(i)[5], decimals),
             }
             for i in range(len(per_class["Box-P"]))
         ]
@@ -1253,7 +1273,8 @@ class SegmentMetrics(DetMetrics):
             *DetMetrics.keys.fget(self),
             "metrics/precision(M)",
             "metrics/recall(M)",
-            "metrics/recall50(M)",
+            "metrics/precision@0.4(M)",
+            "metrics/recall@0.4(M)",
             "metrics/mAP50(M)",
             "metrics/mAP50-95(M)",
         ]
@@ -1313,7 +1334,8 @@ class SegmentMetrics(DetMetrics):
         per_class = {
             "Mask-P": self.seg.p,
             "Mask-R": self.seg.r,
-            "Mask-R@50": self.seg.r50,
+            "Mask-P@0.4": self.seg.p_conf40,
+            "Mask-R@0.4": self.seg.r_conf40,
             "Mask-F1": self.seg.f1,
         }
         summary = DetMetrics.summary(self, normalize, decimals)  # get box summary
@@ -1393,7 +1415,8 @@ class PoseMetrics(DetMetrics):
             *DetMetrics.keys.fget(self),
             "metrics/precision(P)",
             "metrics/recall(P)",
-            "metrics/recall50(P)",
+            "metrics/precision@0.4(P)",
+            "metrics/recall@0.4(P)",
             "metrics/mAP50(P)",
             "metrics/mAP50-95(P)",
         ]
@@ -1456,7 +1479,8 @@ class PoseMetrics(DetMetrics):
         per_class = {
             "Pose-P": self.pose.p,
             "Pose-R": self.pose.r,
-            "Pose-R@50": self.pose.r50,
+            "Pose-P@0.4": self.pose.p_conf40,
+            "Pose-R@0.4": self.pose.r_conf40,
             "Pose-F1": self.pose.f1,
         }
         summary = DetMetrics.summary(self, normalize, decimals)  # get box summary
