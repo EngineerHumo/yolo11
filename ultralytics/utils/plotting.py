@@ -891,10 +891,13 @@ def plot_results(file: str = "path/to/results.csv", dir: str = "", on_plot: Call
     assert len(files), f"No results.csv files found in {save_dir.resolve()}, nothing to plot."
 
     loss_keys, metric_keys = [], []
+    columns: list[str] = []
+    ax = []
+    fig = None
     for i, f in enumerate(files):
         try:
             data = pl.read_csv(f, infer_schema_length=None)
-            if i == 0:
+            if not columns:
                 for c in data.columns:
                     if "loss" in c:
                         loss_keys.append(c)
@@ -904,8 +907,14 @@ def plot_results(file: str = "path/to/results.csv", dir: str = "", on_plot: Call
                 columns = (
                     loss_keys[:loss_mid] + metric_keys[:metric_mid] + loss_keys[loss_mid:] + metric_keys[metric_mid:]
                 )
-                fig, ax = plt.subplots(2, len(columns) // 2, figsize=(len(columns) + 2, 6), tight_layout=True)
-                ax = ax.ravel()
+                if not columns:
+                    LOGGER.warning(f"No loss or metric columns found in {f}, skipping plot.")
+                    return
+                num_plots = len(columns)
+                nrows = min(2, num_plots)
+                ncols = math.ceil(num_plots / nrows)
+                fig, ax = plt.subplots(nrows, ncols, figsize=(max(ncols, 1) + 2, 3 * nrows), tight_layout=True)
+                ax = np.array(ax, dtype=object).ravel()
             x = data.select(data.columns[0]).to_numpy().flatten()
             for i, j in enumerate(columns):
                 y = data.select(j).to_numpy().flatten().astype("float")
@@ -914,7 +923,18 @@ def plot_results(file: str = "path/to/results.csv", dir: str = "", on_plot: Call
                 ax[i].set_title(j, fontsize=12)
         except Exception as e:
             LOGGER.error(f"Plotting error for {f}: {e}")
-    ax[1].legend()
+
+    if not ax:
+        LOGGER.warning("No plots were generated from the provided results files.")
+        return
+
+    for j in range(len(columns), len(ax)):
+        ax[j].axis("off")
+
+    # Use the first axis that has plotted lines for the legend
+    legend_ax = next((a for a in ax if a.has_data()), None)
+    if legend_ax:
+        legend_ax.legend()
     fname = save_dir / "results.png"
     fig.savefig(fname, dpi=200)
     plt.close()
