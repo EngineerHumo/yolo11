@@ -351,7 +351,7 @@ def check_cfg(cfg: dict, hard: bool = True) -> None:
         - None values are ignored as they may be from optional arguments.
         - Fraction keys are checked to be within the range [0.0, 1.0].
     """
-    for k, v in cfg.items():
+    for k, v in list(cfg.items()):
         if v is not None:  # None values may be from optional args
             if k == "scale" and isinstance(v, str):
                 try:
