@@ -11,9 +11,8 @@ from ultralytics.utils import LOGGER, SETTINGS, TESTS_RUNNING, colorstr
 try:  # Verify integration is enabled
     assert not TESTS_RUNNING
     assert SETTINGS.get("visdom", False) is True
-    from visdom import Visdom
-
     import numpy as np
+    from visdom import Visdom
 
     VISDOM_ENABLED = True
 except (ImportError, AssertionError, AttributeError, KeyError):
@@ -50,7 +49,7 @@ def _ensure_client() -> Visdom | None:
             if not _CLIENT.check_connection():
                 raise ConnectionError("unable to connect to Visdom server")
             LOGGER.info(f"{PREFIX}Connected to {_SERVER}:{_PORT} (env='{_ENV}')")
-        except Exception as err:  # noqa: BLE001
+        except Exception as err:
             LOGGER.warning(f"{PREFIX}Visdom client disabled: {err}")
             _CLIENT = None
             _CLIENT_FAILED = True
