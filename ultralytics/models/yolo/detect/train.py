@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import math
 import random
-from copy import copy
+from copy import copy, deepcopy
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -14,7 +15,7 @@ import torch.nn as nn
 from ultralytics.data import build_dataloader, build_yolo_dataset
 from ultralytics.engine.trainer import BaseTrainer
 from ultralytics.models import yolo
-from ultralytics.nn.tasks import DetectionModel
+from ultralytics.nn.tasks import DetectionModel, yaml_model_load
 from ultralytics.utils import DEFAULT_CFG, LOGGER, RANK
 from ultralytics.utils.patches import override_configs
 from ultralytics.utils.plotting import plot_images, plot_labels
@@ -155,7 +156,17 @@ class DetectionTrainer(BaseTrainer):
         Returns:
             (DetectionModel): YOLO detection model.
         """
-        model = DetectionModel(cfg, nc=self.data["nc"], ch=self.data["channels"], verbose=verbose and RANK == -1)
+        model_scale = getattr(self.args, "model_scale", None)
+        model_cfg = cfg
+        if model_scale:
+            if isinstance(model_cfg, (str, Path)):
+                model_cfg = yaml_model_load(model_cfg)
+            else:
+                model_cfg = deepcopy(model_cfg)
+            model_cfg["scale"] = model_scale
+        model = DetectionModel(
+            model_cfg, nc=self.data["nc"], ch=self.data["channels"], verbose=verbose and RANK == -1
+        )
         if weights:
             model.load(weights)
         return model
