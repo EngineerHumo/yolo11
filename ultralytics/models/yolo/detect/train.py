@@ -164,9 +164,7 @@ class DetectionTrainer(BaseTrainer):
             else:
                 model_cfg = deepcopy(model_cfg)
             model_cfg["scale"] = model_scale
-        model = DetectionModel(
-            model_cfg, nc=self.data["nc"], ch=self.data["channels"], verbose=verbose and RANK == -1
-        )
+        model = DetectionModel(model_cfg, nc=self.data["nc"], ch=self.data["channels"], verbose=verbose and RANK == -1)
         if weights:
             model.load(weights)
         return model
