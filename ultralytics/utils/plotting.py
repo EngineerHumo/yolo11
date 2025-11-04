@@ -912,7 +912,7 @@ def plot_results(file: str = "path/to/results.csv", dir: str = "", on_plot: Call
         except Exception as e:
             LOGGER.error(f"Plotting error for {f}: {e}")
 
-    if not ax:
+    if ax is None or len(ax) == 0:
         LOGGER.warning("No plots were generated from the provided results files.")
         return
 
