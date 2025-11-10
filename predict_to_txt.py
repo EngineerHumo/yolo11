@@ -12,6 +12,7 @@ from ultralytics import YOLO
 
 DEFAULT_MODEL_PATH = "/home/wensheng/jiaqi/ultralytics/runs/detect/train39/weights/best.pt"
 DEFAULT_SOURCE_DIR = "/home/wensheng/jiaqi/ultralytics/video"
+OUTPUT_DIR = Path("/home/wensheng/jiaqi/ultralytics/output_txt")
 
 BOTTOM_CROP_PIXELS = 38
 TARGET_IMAGE_SIZE = 1240
@@ -73,8 +74,8 @@ def prepare_image(image: np.ndarray) -> np.ndarray:
     return cropped
 
 
-def save_detections_to_txt(image_path: Path, detections) -> None:
-    txt_path = image_path.with_suffix(".txt")
+def save_detections_to_txt(output_path: Path, detections) -> None:
+    txt_path = output_path.with_suffix(".txt")
     with open(txt_path, "w", encoding="utf-8") as file:
         for result in detections:
             boxes = getattr(result.boxes, "xywhn", None)
@@ -89,14 +90,17 @@ def save_detections_to_txt(image_path: Path, detections) -> None:
                 )
 
 
-def process_images(model: YOLO, images: List[Path]) -> None:
+def process_images(model: YOLO, images: List[Path], output_dir: Path) -> None:
+    output_dir.mkdir(parents=True, exist_ok=True)
     for image_path in images:
         image = cv2.imread(str(image_path))
         if image is None:
             raise RuntimeError(f"Failed to read image {image_path!s}")
         processed_image = prepare_image(image)
         detections = run_inference(model, processed_image)
-        save_detections_to_txt(image_path, detections)
+        output_image_path = output_dir / image_path.name
+        cv2.imwrite(str(output_image_path), processed_image)
+        save_detections_to_txt(output_image_path, detections)
 
 
 def main() -> None:
@@ -106,9 +110,12 @@ def main() -> None:
     model = YOLO(args.model)
 
     images = collect_images(source_dir)
-    process_images(model, images)
+    process_images(model, images, OUTPUT_DIR)
 
-    print("Detection results saved as YOLO format txt files in the source directory.")
+    print(
+        "Cropped 1240x1240 images and YOLO txt files saved to"
+        f" {OUTPUT_DIR!s}."
+    )
 
 
 if __name__ == "__main__":
