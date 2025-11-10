@@ -19,7 +19,7 @@ from ultralytics import YOLO
 
 DEFAULT_MODEL_PATH = "/home/wensheng/jiaqi/ultralytics/runs/detect/train53/weights/best.pt"
 DEFAULT_SOURCE_DIR = "/home/wensheng/jiaqi/ultralytics/video"
-DEFAULT_OUTPUT_SUBDIR = "predictions"
+DEFAULT_OUTPUT_SUBDIR = "/home/wensheng/jiaqi/ultralytics/output_classification"
 DEFAULT_VIDEO_NAME = "predictions.mp4"
 DEFAULT_VIDEO_FPS = 5.0
 
@@ -255,7 +255,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--classification-checkpoint",
         type=str,
-        required=True,
+        default="/home/wensheng/jiaqi/ultralytics/classification.pt",
         help="Path to the classification.pt checkpoint for the spot classifier.",
     )
     parser.add_argument(
@@ -317,6 +317,7 @@ def class_label(class_names: Sequence[str] | dict[int, str], class_id: int) -> s
         return class_names.get(class_id, f"class {class_id}")
     if 0 <= class_id < len(class_names):
         return class_names[class_id]
+    print(class_id)
     return f"class {class_id}"
 
 
