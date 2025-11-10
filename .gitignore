@@ -108,5 +108,6 @@ ENV/
 *.pt
 *.pth
 *.onnx
+*.mp4
 
 !documentation/assets/scribble_example.png
