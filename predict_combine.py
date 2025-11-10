@@ -19,7 +19,7 @@ from ultralytics import YOLO
 
 DEFAULT_MODEL_PATH = "/home/wensheng/jiaqi/ultralytics/runs/detect/train53/weights/best.pt"
 DEFAULT_SOURCE_DIR = "/home/wensheng/jiaqi/ultralytics/video"
-DEFAULT_OUTPUT_SUBDIR = "/home/wensheng/jiaqi/ultralytics/output_classification/test1
+DEFAULT_OUTPUT_SUBDIR = "/home/wensheng/jiaqi/ultralytics/output_classification/test1"
 DEFAULT_VIDEO_NAME = "predictions.mp4"
 DEFAULT_VIDEO_FPS = 5.0
 
@@ -221,8 +221,9 @@ def classify_detections(
         else:
             embedding = outputs
         scores = components.arcface.inference(embedding).detach().cpu()
-
+    print(scores)
     predicted = scores.argmax(dim=1).tolist()
+    
     return predicted
 
 
@@ -255,7 +256,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--classification-checkpoint",
         type=str,
-        default="/home/wensheng/jiaqi/ultralytics/classification.pt",
+        default="/home/wensheng/jiaqi/ultralytics/classification_1.pt",
         help="Path to the classification.pt checkpoint for the spot classifier.",
     )
     parser.add_argument(
@@ -313,7 +314,6 @@ def color_for_class(class_id: int) -> tuple[int, int, int]:
 
 
 def class_label(class_names: Sequence[str] | dict[int, str], class_id: int) -> str:
-    print(class_id)
     if isinstance(class_names, dict):
         return class_names.get(class_id, f"class {class_id}")
     if 0 <= class_id < len(class_names):
@@ -521,6 +521,9 @@ def save_annotated_images(
             if combined_boxes.size:
                 predicted_classes = classify_detections(cropped, combined_boxes, classification)
                 mapped_classes, labels = map_classification_to_yolo(predicted_classes, names)
+                #print(predicted_classes)
+                #print("to")
+                #print(labels)
                 combined_image, present = draw_boxes(
                     combined_image,
                     combined_boxes,
