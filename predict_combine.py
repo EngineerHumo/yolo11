@@ -24,6 +24,16 @@ DEFAULT_VIDEO_NAME = "predictions.mp4"
 DEFAULT_VIDEO_FPS = 5.0
 
 
+CLASSIFICATION_TO_YOLO_LABEL: dict[int, str] = {
+    0: "old",
+    1: "1",
+    2: "2",
+    3: "2+",
+    4: "3",
+    5: "3+",
+}
+
+
 class ArcMarginProduct(nn.Module):
     def __init__(
         self,
@@ -310,6 +320,29 @@ def class_label(class_names: Sequence[str] | dict[int, str], class_id: int) -> s
     return f"class {class_id}"
 
 
+def _build_name_to_id(names: Sequence[str] | dict[int, str]) -> dict[str, int]:
+    if isinstance(names, dict):
+        return {value: key for key, value in names.items()}
+    return {name: idx for idx, name in enumerate(names)}
+
+
+def map_classification_to_yolo(
+    predicted: Sequence[int],
+    names: Sequence[str] | dict[int, str],
+) -> tuple[List[int], List[str]]:
+    name_to_id = _build_name_to_id(names)
+    mapped_classes: List[int] = []
+    labels: List[str] = []
+    for cls_id in predicted:
+        label = CLASSIFICATION_TO_YOLO_LABEL.get(cls_id, f"class {cls_id}")
+        mapped_class = name_to_id.get(label)
+        if mapped_class is None:
+            mapped_class = cls_id
+        mapped_classes.append(mapped_class)
+        labels.append(label)
+    return mapped_classes, labels
+
+
 def crop_bottom_rows(image: np.ndarray, rows_to_remove: int = 38) -> np.ndarray:
     if image.shape[0] <= rows_to_remove:
         raise ValueError(
@@ -486,11 +519,11 @@ def save_annotated_images(
             )
             if combined_boxes.size:
                 predicted_classes = classify_detections(cropped, combined_boxes, classification)
-                labels = [class_label(names, cls_id) for cls_id in predicted_classes]
+                mapped_classes, labels = map_classification_to_yolo(predicted_classes, names)
                 combined_image, present = draw_boxes(
                     combined_image,
                     combined_boxes,
-                    predicted_classes,
+                    mapped_classes,
                     scale_x,
                     scale_y,
                     labels=labels,
