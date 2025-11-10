@@ -19,7 +19,7 @@ from ultralytics import YOLO
 
 DEFAULT_MODEL_PATH = "/home/wensheng/jiaqi/ultralytics/runs/detect/train53/weights/best.pt"
 DEFAULT_SOURCE_DIR = "/home/wensheng/jiaqi/ultralytics/video"
-DEFAULT_OUTPUT_SUBDIR = "/home/wensheng/jiaqi/ultralytics/output_classification"
+DEFAULT_OUTPUT_SUBDIR = "/home/wensheng/jiaqi/ultralytics/output_classification/test1
 DEFAULT_VIDEO_NAME = "predictions.mp4"
 DEFAULT_VIDEO_FPS = 5.0
 
@@ -313,11 +313,11 @@ def color_for_class(class_id: int) -> tuple[int, int, int]:
 
 
 def class_label(class_names: Sequence[str] | dict[int, str], class_id: int) -> str:
+    print(class_id)
     if isinstance(class_names, dict):
         return class_names.get(class_id, f"class {class_id}")
     if 0 <= class_id < len(class_names):
         return class_names[class_id]
-    print(class_id)
     return f"class {class_id}"
 
 
