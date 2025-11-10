@@ -13,6 +13,9 @@ from ultralytics import YOLO
 DEFAULT_MODEL_PATH = "/home/wensheng/jiaqi/ultralytics/runs/detect/train39/weights/best.pt"
 DEFAULT_SOURCE_DIR = "/home/wensheng/jiaqi/ultralytics/video"
 
+BOTTOM_CROP_PIXELS = 38
+TARGET_IMAGE_SIZE = 1240
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -48,6 +51,28 @@ def run_inference(model: YOLO, image: np.ndarray):
     return model.predict(source=image, verbose=False, save=False)
 
 
+def prepare_image(image: np.ndarray) -> np.ndarray:
+    """Crop and resize the image to the 1240x1240 target required by the pipeline."""
+
+    height, width = image.shape[:2]
+    if height <= BOTTOM_CROP_PIXELS:
+        raise ValueError(
+            "Image height must be greater than the bottom crop value of"
+            f" {BOTTOM_CROP_PIXELS}, got {height}."
+        )
+
+    cropped = image[: height - BOTTOM_CROP_PIXELS, :, :]
+
+    if cropped.shape[0] != TARGET_IMAGE_SIZE or cropped.shape[1] != TARGET_IMAGE_SIZE:
+        cropped = cv2.resize(
+            cropped,
+            (TARGET_IMAGE_SIZE, TARGET_IMAGE_SIZE),
+            interpolation=cv2.INTER_LINEAR,
+        )
+
+    return cropped
+
+
 def save_detections_to_txt(image_path: Path, detections) -> None:
     txt_path = image_path.with_suffix(".txt")
     with open(txt_path, "w", encoding="utf-8") as file:
@@ -69,7 +94,8 @@ def process_images(model: YOLO, images: List[Path]) -> None:
         image = cv2.imread(str(image_path))
         if image is None:
             raise RuntimeError(f"Failed to read image {image_path!s}")
-        detections = run_inference(model, image)
+        processed_image = prepare_image(image)
+        detections = run_inference(model, processed_image)
         save_detections_to_txt(image_path, detections)
 
 
