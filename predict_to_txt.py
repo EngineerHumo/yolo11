@@ -1,14 +1,14 @@
 """Predict script for running YOLO detections on a directory of images and saving results in YOLO format."""
+
 from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from typing import List
 
 import cv2
 import numpy as np
-from ultralytics import YOLO
 
+from ultralytics import YOLO
 
 DEFAULT_MODEL_PATH = "/home/wensheng/jiaqi/ultralytics/runs/detect/train39/weights/best.pt"
 DEFAULT_SOURCE_DIR = "/home/wensheng/jiaqi/ultralytics/video"
@@ -33,11 +33,9 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def collect_images(source_dir: Path) -> List[Path]:
-    images: List[Path] = sorted(
-        path
-        for path in source_dir.iterdir()
-        if path.is_file() and path.suffix.lower() == ".jpg"
+def collect_images(source_dir: Path) -> list[Path]:
+    images: list[Path] = sorted(
+        path for path in source_dir.iterdir() if path.is_file() and path.suffix.lower() == ".jpg"
     )
     if not images:
         raise FileNotFoundError(f"No JPG images found in {source_dir!s}")
@@ -59,12 +57,10 @@ def save_detections_to_txt(image_path: Path, detections) -> None:
             boxes_np = boxes.cpu().numpy()
             class_ids_list = class_ids.int().cpu().tolist()
             for class_id, (x_center, y_center, width, height) in zip(class_ids_list, boxes_np):
-                file.write(
-                    f"{class_id} {x_center:.6f} {y_center:.6f} {width:.6f} {height:.6f}\n"
-                )
+                file.write(f"{class_id} {x_center:.6f} {y_center:.6f} {width:.6f} {height:.6f}\n")
 
 
-def process_images(model: YOLO, images: List[Path]) -> None:
+def process_images(model: YOLO, images: list[Path]) -> None:
     for image_path in images:
         image = cv2.imread(str(image_path))
         if image is None:
