@@ -1,11 +1,11 @@
-"""Predict script for running YOLO detections on a directory of images.
-"""
+"""Predict script for running YOLO detections on a directory of images."""
+
 from __future__ import annotations
 
 import argparse
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, List, Optional, Sequence, Set, Tuple
 
 import cv2
 import numpy as np
@@ -14,8 +14,8 @@ import torch.nn.functional as F
 from PIL import Image
 from torch import Tensor, nn
 from torchvision import transforms as T
-from ultralytics import YOLO
 
+from ultralytics import YOLO
 
 DEFAULT_MODEL_PATH = "/home/wensheng/jiaqi/ultralytics/runs/detect/train53/weights/best.pt"
 DEFAULT_SOURCE_DIR = "/home/wensheng/jiaqi/ultralytics/video"
@@ -96,7 +96,7 @@ class DualEncoderMetricModel(nn.Module):
             nn.BatchNorm1d(embedding_dim),
         )
 
-    def forward(self, spot: Tensor, global_image: Tensor) -> Tuple[Tensor, Tensor]:
+    def forward(self, spot: Tensor, global_image: Tensor) -> tuple[Tensor, Tensor]:
         spot_feat = self.spot_encoder(spot)
         global_feat = self.global_encoder(global_image)
         combined = torch.cat([spot_feat, global_feat], dim=1)
@@ -105,14 +105,14 @@ class DualEncoderMetricModel(nn.Module):
         return embedding, combined
 
 
-def _build_transforms() -> Tuple[T.Compose, T.Compose]:
+def _build_transforms() -> tuple[T.Compose, T.Compose]:
     normalize = T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     spot_transform = T.Compose([T.ToTensor(), normalize])
     global_transform = T.Compose([T.ToTensor(), normalize])
     return spot_transform, global_transform
 
 
-def load_checkpoint(checkpoint_path: Path, device: torch.device) -> Tuple[DualEncoderMetricModel, ArcMarginProduct]:
+def load_checkpoint(checkpoint_path: Path, device: torch.device) -> tuple[DualEncoderMetricModel, ArcMarginProduct]:
     if not checkpoint_path.exists():
         raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
 
@@ -151,8 +151,8 @@ def _extract_center_patch(image: np.ndarray, box: np.ndarray, size: int = 64) ->
     cy = (y1 + y2) / 2.0
     half = size / 2.0
 
-    left = int(round(cx - half))
-    top = int(round(cy - half))
+    left = round(cx - half)
+    top = round(cy - half)
     right = left + size
     bottom = top + size
 
@@ -196,11 +196,11 @@ def classify_detections(
     image: np.ndarray,
     boxes: np.ndarray,
     components: ClassificationComponents,
-) -> List[int]:
+) -> list[int]:
     if boxes.size == 0:
         return []
 
-    spot_tensors: List[Tensor] = []
+    spot_tensors: list[Tensor] = []
     for box in boxes:
         patch = _extract_center_patch(image, box, size=64)
         pil_image = _convert_bgr_to_pil(patch)
@@ -267,11 +267,9 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def collect_images(source_dir: Path) -> List[Path]:
-    images: List[Path] = sorted(
-        path
-        for path in source_dir.iterdir()
-        if path.is_file() and path.suffix.lower() == ".jpg"
+def collect_images(source_dir: Path) -> list[Path]:
+    images: list[Path] = sorted(
+        path for path in source_dir.iterdir() if path.is_file() and path.suffix.lower() == ".jpg"
     )
     if not images:
         raise FileNotFoundError(f"No JPG images found in {source_dir!s}")
@@ -329,10 +327,10 @@ def _build_name_to_id(names: Sequence[str] | dict[int, str]) -> dict[str, int]:
 def map_classification_to_yolo(
     predicted: Sequence[int],
     names: Sequence[str] | dict[int, str],
-) -> tuple[List[int], List[str]]:
+) -> tuple[list[int], list[str]]:
     name_to_id = _build_name_to_id(names)
-    mapped_classes: List[int] = []
-    labels: List[str] = []
+    mapped_classes: list[int] = []
+    labels: list[str] = []
     for cls_id in predicted:
         label = CLASSIFICATION_TO_YOLO_LABEL.get(cls_id, f"class {cls_id}")
         mapped_class = name_to_id.get(label)
@@ -345,9 +343,7 @@ def map_classification_to_yolo(
 
 def crop_bottom_rows(image: np.ndarray, rows_to_remove: int = 38) -> np.ndarray:
     if image.shape[0] <= rows_to_remove:
-        raise ValueError(
-            f"Image height {image.shape[0]} is not greater than rows_to_remove={rows_to_remove}."
-        )
+        raise ValueError(f"Image height {image.shape[0]} is not greater than rows_to_remove={rows_to_remove}.")
     return image[: image.shape[0] - rows_to_remove, :, :]
 
 
@@ -362,10 +358,8 @@ def ensure_size(image: np.ndarray, width: int, height: int) -> tuple[np.ndarray,
     return resized, scale_x, scale_y
 
 
-def draw_legend(
-    image: np.ndarray, class_ids: Iterable[int], class_names: Sequence[str] | dict[int, str]
-) -> np.ndarray:
-    unique_ids: List[int] = sorted(set(class_ids))
+def draw_legend(image: np.ndarray, class_ids: Iterable[int], class_names: Sequence[str] | dict[int, str]) -> np.ndarray:
+    unique_ids: list[int] = sorted(set(class_ids))
     if not unique_ids:
         return image
 
@@ -373,23 +367,19 @@ def draw_legend(
     font = cv2.FONT_HERSHEY_SIMPLEX
     scale_base = max(image.shape[0], image.shape[1]) / 1000.0
     font_scale = max(0.4, 0.5 * scale_base)
-    thickness = max(1, int(round(font_scale * 2)))
-    box_edge = int(round(18 * scale_base))
+    thickness = max(1, round(font_scale * 2))
+    box_edge = round(18 * scale_base)
     box_edge = max(box_edge, 12)
 
-    text_widths: List[int] = []
-    legend_labels: List[str] = []
+    text_widths: list[int] = []
+    legend_labels: list[str] = []
     for class_id in unique_ids:
         name = class_label(class_names, class_id)
         legend_labels.append(name)
-        (text_width, text_height), _ = cv2.getTextSize(name, font, font_scale, thickness)
+        (text_width, _text_height), _ = cv2.getTextSize(name, font, font_scale, thickness)
         text_widths.append(text_width)
 
-    legend_width = (
-        3 * legend_padding
-        + box_edge
-        + (max(text_widths) if text_widths else 0)
-    )
+    legend_width = 3 * legend_padding + box_edge + (max(text_widths) if text_widths else 0)
     legend_height = legend_padding + len(unique_ids) * (box_edge + legend_padding)
 
     start_x = max(image.shape[1] - legend_width - legend_padding, 0)
@@ -423,16 +413,16 @@ def draw_boxes(
     classes: Sequence[int],
     scale_x: float,
     scale_y: float,
-    labels: Optional[Sequence[str]] = None,
-) -> tuple[np.ndarray, Set[int]]:
+    labels: Sequence[str] | None = None,
+) -> tuple[np.ndarray, set[int]]:
     annotated = image.copy()
-    present_classes: Set[int] = set()
+    present_classes: set[int] = set()
     for idx, (box, class_id) in enumerate(zip(boxes, classes)):
         x1, y1, x2, y2 = box.astype(float)
-        x1 = int(round(x1 * scale_x))
-        y1 = int(round(y1 * scale_y))
-        x2 = int(round(x2 * scale_x))
-        y2 = int(round(y2 * scale_y))
+        x1 = round(x1 * scale_x)
+        y1 = round(y1 * scale_y)
+        x2 = round(x2 * scale_x)
+        y2 = round(y2 * scale_y)
         color = color_for_class(int(class_id))
         cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
         if labels is not None and idx < len(labels):
@@ -441,10 +431,8 @@ def draw_boxes(
                 font = cv2.FONT_HERSHEY_SIMPLEX
                 font_scale = max(image.shape[0], image.shape[1]) / 1000.0
                 font_scale = max(font_scale, 0.5)
-                thickness = max(1, int(round(font_scale * 2)))
-                (text_width, text_height), baseline = cv2.getTextSize(
-                    label_text, font, font_scale, thickness
-                )
+                thickness = max(1, round(font_scale * 2))
+                (text_width, text_height), baseline = cv2.getTextSize(label_text, font, font_scale, thickness)
                 text_origin = (x1, max(y1 - 5, 0))
                 box_start = (text_origin[0], text_origin[1] - text_height - baseline)
                 box_end = (text_origin[0] + text_width, text_origin[1])
@@ -470,12 +458,12 @@ def draw_boxes(
 
 def save_annotated_images(
     model: YOLO,
-    images: List[Path],
+    images: list[Path],
     output_dir: Path,
-    classification: Optional[ClassificationComponents] = None,
-) -> Tuple[List[Path], List[Path]]:
-    saved_images: List[Path] = []
-    saved_combined: List[Path] = []
+    classification: ClassificationComponents | None = None,
+) -> tuple[list[Path], list[Path]]:
+    saved_images: list[Path] = []
+    saved_combined: list[Path] = []
     for image_path in images:
         original = cv2.imread(str(image_path))
         if original is None:
@@ -490,8 +478,8 @@ def save_annotated_images(
         names = detections[0].names if detections else {}
 
         annotated = resized.copy()
-        image_classes: Set[int] = set()
-        detection_boxes: List[np.ndarray] = []
+        image_classes: set[int] = set()
+        detection_boxes: list[np.ndarray] = []
         for result in detections:
             if result.boxes is None or result.boxes.xyxy is None:
                 continue
@@ -511,12 +499,8 @@ def save_annotated_images(
 
         if classification is not None:
             combined_image = resized.copy()
-            combined_classes: Set[int] = set()
-            combined_boxes = (
-                np.vstack(detection_boxes)
-                if detection_boxes
-                else np.empty((0, 4), dtype=np.float32)
-            )
+            combined_classes: set[int] = set()
+            combined_boxes = np.vstack(detection_boxes) if detection_boxes else np.empty((0, 4), dtype=np.float32)
             if combined_boxes.size:
                 predicted_classes = classify_detections(cropped, combined_boxes, classification)
                 mapped_classes, labels = map_classification_to_yolo(predicted_classes, names)
@@ -532,14 +516,12 @@ def save_annotated_images(
             combined_image = draw_legend(combined_image, combined_classes, names)
             combine_output_path = output_dir / f"{image_path.stem}_combine{image_path.suffix}"
             if not cv2.imwrite(str(combine_output_path), combined_image):
-                raise RuntimeError(
-                    f"Failed to write combined annotated image to {combine_output_path!s}"
-                )
+                raise RuntimeError(f"Failed to write combined annotated image to {combine_output_path!s}")
             saved_combined.append(combine_output_path)
     return saved_images, saved_combined
 
 
-def build_video_from_images(images: List[Path], output_path: Path, fps: float) -> None:
+def build_video_from_images(images: list[Path], output_path: Path, fps: float) -> None:
     first_image = cv2.imread(str(images[0]))
     if first_image is None:
         raise RuntimeError(f"Unable to read the first annotated image {images[0]!s}")
@@ -585,9 +567,7 @@ def main() -> None:
     video_path = output_dir / args.video_name
     build_video_from_images(saved_images, video_path, DEFAULT_VIDEO_FPS)
 
-    combined_video_path = output_dir / (
-        f"{Path(args.video_name).stem}_combine{Path(args.video_name).suffix}"
-    )
+    combined_video_path = output_dir / (f"{Path(args.video_name).stem}_combine{Path(args.video_name).suffix}")
     if saved_combined_images:
         build_video_from_images(saved_combined_images, combined_video_path, DEFAULT_VIDEO_FPS)
 
