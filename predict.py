@@ -11,7 +11,7 @@ from ultralytics import YOLO
 
 
 DEFAULT_MODEL_PATH = "/home/wensheng/jiaqi/ultralytics/runs/detect/train53/weights/best.pt"
-DEFAULT_SOURCE_DIR = "C:/Users/jiaqi.guo/testproject/video"
+DEFAULT_SOURCE_DIR = "/home/wensheng/jiaqi/ultralytics/video"
 DEFAULT_OUTPUT_SUBDIR = "predictions"
 DEFAULT_VIDEO_NAME = "predictions.mp4"
 
