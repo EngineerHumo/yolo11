@@ -49,7 +49,7 @@ def collect_images(source_dir: Path) -> List[Path]:
 
 
 def run_inference(model: YOLO, image: np.ndarray):
-    return model.predict(source=image, verbose=False, save=False)
+    return model.predict(source=image, verbose=False, save=False, prob=True)
 
 
 def prepare_image(image: np.ndarray) -> np.ndarray:
@@ -74,19 +74,47 @@ def prepare_image(image: np.ndarray) -> np.ndarray:
     return cropped
 
 
+NUM_CLASSES = 6
+
+
 def save_detections_to_txt(output_path: Path, detections) -> None:
     txt_path = output_path.with_suffix(".txt")
     with open(txt_path, "w", encoding="utf-8") as file:
         for result in detections:
             boxes = getattr(result.boxes, "xywhn", None)
             class_ids = getattr(result.boxes, "cls", None)
-            if boxes is None or class_ids is None:
+            confidences = getattr(result.boxes, "conf", None)
+            probs = getattr(result, "probs", None)
+
+            if boxes is None:
                 continue
             boxes_np = boxes.cpu().numpy()
-            class_ids_list = class_ids.int().cpu().tolist()
-            for class_id, (x_center, y_center, width, height) in zip(class_ids_list, boxes_np):
+            class_ids_list = (
+                class_ids.int().cpu().tolist() if class_ids is not None else [None] * len(boxes_np)
+            )
+
+            probs_np = None
+            if probs is not None:
+                probs_tensor = getattr(probs, "data", probs)
+                if probs_tensor is not None:
+                    probs_np = probs_tensor.cpu().numpy()
+
+            if probs_np is not None and len(probs_np) == len(boxes_np):
+                confidences_np = probs_np[:, :NUM_CLASSES]
+            else:
+                confidences_np = np.zeros((len(boxes_np), NUM_CLASSES), dtype=float)
+                if confidences is not None:
+                    conf_list = confidences.cpu().numpy().tolist()
+                else:
+                    conf_list = [0.0] * len(boxes_np)
+                for idx, (class_id, conf_value) in enumerate(zip(class_ids_list, conf_list)):
+                    if class_id is not None and 0 <= class_id < NUM_CLASSES:
+                        confidences_np[idx][int(class_id)] = float(conf_value)
+
+            for confidence_row, (x_center, y_center, width, height) in zip(confidences_np, boxes_np):
+                confidence_str = " ".join(f"{conf_value:.6f}" for conf_value in confidence_row)
                 file.write(
-                    f"{class_id} {x_center:.6f} {y_center:.6f} {width:.6f} {height:.6f}\n"
+                    f"{confidence_str} {x_center:.6f} {y_center:.6f} {width:.6f} {height:.6f}\n"
                 )
 
 
