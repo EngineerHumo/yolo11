@@ -10,7 +10,7 @@ import numpy as np
 from ultralytics import YOLO
 
 
-DEFAULT_MODEL_PATH = "/home/wensheng/jiaqi/ultralytics/runs/detect/train39/weights/best.pt"
+DEFAULT_MODEL_PATH = "/home/wensheng/jiaqi/ultralytics/runs/detect/train13/weights/best.pt"
 DEFAULT_SOURCE_DIR = "/home/wensheng/jiaqi/ultralytics/video"
 OUTPUT_DIR = Path("/home/wensheng/jiaqi/ultralytics/output_txt")
 
