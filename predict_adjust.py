@@ -293,6 +293,8 @@ def main() -> None:
     adjust_video_path = adjustmask_dir / "predict_adjust.mp4"
     origin_writer: cv2.VideoWriter | None = None
     adjust_writer: cv2.VideoWriter | None = None
+    origin_frame_size: tuple[int, int] | None = None
+    adjust_frame_size: tuple[int, int] | None = None
 
     try:
         for index, image_path in enumerate(images):
@@ -317,20 +319,18 @@ def main() -> None:
             )
 
             if origin_writer is None:
-                frame_size = (origin_annotated.shape[1], origin_annotated.shape[0])
+                origin_frame_size = (origin_annotated.shape[1], origin_annotated.shape[0])
                 origin_writer = cv2.VideoWriter(
-                    str(origin_video_path), fourcc, fps, frame_size
+                    str(origin_video_path), fourcc, fps, origin_frame_size
                 )
                 if not origin_writer.isOpened():
                     raise RuntimeError(f"Failed to open video writer for {origin_video_path!s}")
             else:
-                writer_height = int(round(origin_writer.get(cv2.CAP_PROP_FRAME_HEIGHT)))
-                writer_width = int(round(origin_writer.get(cv2.CAP_PROP_FRAME_WIDTH)))
                 if (
-                    origin_annotated.shape[0] != writer_height
-                    or origin_annotated.shape[1] != writer_width
+                    origin_frame_size is None
+                    or origin_annotated.shape[0] != origin_frame_size[1]
+                    or origin_annotated.shape[1] != origin_frame_size[0]
                 ):
-                    #print(origin_annotated.shape[0],origin_annotated.shape[1],writer_height,writer_width)
                     raise RuntimeError("Annotated frame size changed during processing for original video.")
 
             origin_writer.write(origin_annotated)
@@ -342,18 +342,17 @@ def main() -> None:
             )
 
             if adjust_writer is None:
-                frame_size = (adjust_annotated.shape[1], adjust_annotated.shape[0])
+                adjust_frame_size = (adjust_annotated.shape[1], adjust_annotated.shape[0])
                 adjust_writer = cv2.VideoWriter(
-                    str(adjust_video_path), fourcc, fps, frame_size
+                    str(adjust_video_path), fourcc, fps, adjust_frame_size
                 )
                 if not adjust_writer.isOpened():
                     raise RuntimeError(f"Failed to open video writer for {adjust_video_path!s}")
             else:
-                writer_height = int(round(adjust_writer.get(cv2.CAP_PROP_FRAME_HEIGHT)))
-                writer_width = int(round(adjust_writer.get(cv2.CAP_PROP_FRAME_WIDTH)))
                 if (
-                    adjust_annotated.shape[0] != writer_height
-                    or adjust_annotated.shape[1] != writer_width
+                    adjust_frame_size is None
+                    or adjust_annotated.shape[0] != adjust_frame_size[1]
+                    or adjust_annotated.shape[1] != adjust_frame_size[0]
                 ):
                     raise RuntimeError("Annotated frame size changed during processing for adjusted video.")
 
