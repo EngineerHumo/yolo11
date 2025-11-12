@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from typing import Iterable, List, Sequence, Set
+from typing import Iterable, List, Sequence, Set, Tuple
 
 import cv2
 import numpy as np
@@ -13,9 +13,6 @@ from ultralytics import YOLO
 
 DEFAULT_MODEL_PATH = "/home/wensheng/jiaqi/ultralytics/runs/detect/train25/weights/best.pt"
 DEFAULT_SOURCE_DIR = "/home/wensheng/jiaqi/ultralytics/video"
-DEFAULT_OUTPUT_SUBDIR = "predictions"
-DEFAULT_VIDEO_NAME = "predictions.mp4"
-DEFAULT_VIDEO_FPS = 5.0
 
 
 def parse_args() -> argparse.Namespace:
@@ -32,18 +29,6 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_SOURCE_DIR,
         help="Directory containing JPG images for detection.",
     )
-    parser.add_argument(
-        "--output-name",
-        type=str,
-        default=DEFAULT_OUTPUT_SUBDIR,
-        help="Name of the subdirectory where annotated images will be saved.",
-    )
-    parser.add_argument(
-        "--video-name",
-        type=str,
-        default=DEFAULT_VIDEO_NAME,
-        help="Name of the output MP4 video file created from annotated images.",
-    )
     return parser.parse_args()
 
 
@@ -56,12 +41,6 @@ def collect_images(source_dir: Path) -> List[Path]:
     if not images:
         raise FileNotFoundError(f"No JPG images found in {source_dir!s}")
     return images
-
-
-def ensure_output_dir(source_dir: Path, output_name: str) -> Path:
-    output_dir = source_dir / output_name
-    output_dir.mkdir(parents=True, exist_ok=True)
-    return output_dir
 
 
 COLOR_PALETTE: Sequence[tuple[int, int, int]] = (
@@ -187,74 +166,152 @@ def draw_boxes(
     return annotated, present_classes
 
 
-def save_annotated_images(model: YOLO, images: List[Path], output_dir: Path) -> List[Path]:
-    saved_images: List[Path] = []
-    for image_path in images:
-        original = cv2.imread(str(image_path))
-        if original is None:
+def compute_reference_hsv_mean(image_paths: Sequence[Path], max_frames: int = 100) -> Tuple[float, float, float]:
+    if not image_paths:
+        raise ValueError("No images provided for computing HSV mean.")
+
+    hsv_sum = np.zeros(3, dtype=np.float64)
+    total_pixels = 0
+
+    for image_path in image_paths[:max_frames]:
+        image = cv2.imread(str(image_path))
+        if image is None:
             raise RuntimeError(f"Failed to read image {image_path!s}")
 
-        cropped = crop_bottom_rows(original)
-        detections = model.predict(source=cropped, verbose=False, save=False)
+        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+        hsv_sum += hsv.reshape(-1, 3).sum(axis=0)
+        total_pixels += hsv.shape[0] * hsv.shape[1]
 
-        resized, scale_x, scale_y = ensure_size(cropped, 1240, 1240)
+    if total_pixels == 0:
+        raise RuntimeError("Images have zero pixels; cannot compute HSV mean.")
 
-        names: Sequence[str] | dict[int, str]
-        names = detections[0].names if detections else {}
-
-        annotated = resized
-        image_classes: Set[int] = set()
-        for result in detections:
-            if result.boxes is None or result.boxes.xyxy is None:
-                continue
-            boxes = result.boxes.xyxy.cpu().numpy()
-            class_ids = result.boxes.cls.int().cpu().tolist()
-            annotated, present = draw_boxes(annotated, boxes, class_ids, scale_x, scale_y)
-            image_classes.update(present)
-
-        annotated = draw_legend(annotated, image_classes, names)
-
-        output_path = output_dir / image_path.name
-        if not cv2.imwrite(str(output_path), annotated):
-            raise RuntimeError(f"Failed to write annotated image to {output_path!s}")
-        saved_images.append(output_path)
-    return saved_images
+    hsv_mean = hsv_sum / float(total_pixels)
+    return float(hsv_mean[0]), float(hsv_mean[1]), float(hsv_mean[2])
 
 
-def build_video_from_images(images: List[Path], output_path: Path, fps: float) -> None:
-    first_image = cv2.imread(str(images[0]))
-    if first_image is None:
-        raise RuntimeError(f"Unable to read the first annotated image {images[0]!s}")
+def adjust_v_channel_to_mean(image: np.ndarray, target_v_mean: float) -> np.ndarray:
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV).astype(np.float32)
+    current_v = hsv[:, :, 2]
+    current_mean = float(current_v.mean())
 
-    height, width, _ = first_image.shape
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    video_writer = cv2.VideoWriter(str(output_path), fourcc, fps, (width, height))
+    if current_mean <= 0.0:
+        adjusted_v = np.clip(np.full_like(current_v, target_v_mean), 0.0, 255.0)
+    else:
+        scale = target_v_mean / current_mean
+        adjusted_v = np.clip(current_v * scale, 0.0, 255.0)
 
-    try:
-        for image_path in images:
-            frame = cv2.imread(str(image_path))
-            if frame is None:
-                raise RuntimeError(f"Unable to read annotated image {image_path!s}")
-            video_writer.write(frame)
-    finally:
-        video_writer.release()
+    hsv[:, :, 2] = adjusted_v
+    adjusted_image = cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2BGR)
+    return adjusted_image
+
+
+def run_detection_and_save(
+    model: YOLO,
+    image: np.ndarray,
+    output_image_path: Path,
+    output_txt_path: Path,
+) -> None:
+    cropped = crop_bottom_rows(image)
+    detections = model.predict(source=cropped, verbose=False, save=False)
+
+    resized, scale_x, scale_y = ensure_size(cropped, 1240, 1240)
+    annotated = resized
+
+    names: Sequence[str] | dict[int, str]
+    names = detections[0].names if detections else {}
+
+    image_classes: Set[int] = set()
+    yolo_records: List[str] = []
+    height, width = cropped.shape[:2]
+
+    for result in detections:
+        if result.boxes is None or result.boxes.xyxy is None or result.boxes.cls is None:
+            continue
+        boxes = result.boxes.xyxy.cpu().numpy()
+        class_ids = result.boxes.cls.int().cpu().tolist()
+
+        annotated, present = draw_boxes(annotated, boxes, class_ids, scale_x, scale_y)
+        image_classes.update(present)
+
+        for box, class_id in zip(boxes, class_ids):
+            x1, y1, x2, y2 = box.astype(float)
+            box_width = x2 - x1
+            box_height = y2 - y1
+            x_center = x1 + box_width / 2.0
+            y_center = y1 + box_height / 2.0
+
+            if width > 0 and height > 0:
+                x_center /= width
+                y_center /= height
+                box_width /= width
+                box_height /= height
+
+            yolo_records.append(
+                f"{class_id} {x_center:.6f} {y_center:.6f} {box_width:.6f} {box_height:.6f}"
+            )
+
+    annotated = draw_legend(annotated, image_classes, names)
+
+    output_image_path.parent.mkdir(parents=True, exist_ok=True)
+    if not cv2.imwrite(str(output_image_path), annotated):
+        raise RuntimeError(f"Failed to write annotated image to {output_image_path!s}")
+
+    output_txt_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_txt_path.open("w", encoding="utf-8") as file:
+        file.write("\n".join(yolo_records))
 
 
 def main() -> None:
     args = parse_args()
     source_dir = Path(args.source)
-    output_dir = ensure_output_dir(source_dir, args.output_name)
+    images = collect_images(source_dir)
+
+    reference_count = min(len(images), 100)
+    reference_hsv_mean = compute_reference_hsv_mean(images, max_frames=reference_count)
+    print(
+        "Reference HSV mean from first "
+        f"{reference_count} frame(s): "
+        f"H={reference_hsv_mean[0]:.2f}, S={reference_hsv_mean[1]:.2f}, V={reference_hsv_mean[2]:.2f}"
+    )
 
     model = YOLO(args.model)
 
-    images = collect_images(source_dir)
-    saved_images = save_annotated_images(model, images, output_dir)
+    adjust_dir = Path("/video/output/adjust")
+    originmask_dir = Path("/video/output/originmask")
+    adjustmask_dir = Path("/video/output/adjustmask")
 
-    video_path = output_dir / args.video_name
-    build_video_from_images(saved_images, video_path, DEFAULT_VIDEO_FPS)
+    for directory in (adjust_dir, originmask_dir, adjustmask_dir):
+        directory.mkdir(parents=True, exist_ok=True)
 
-    print(f"Annotated images saved to: {output_dir!s}")
-    print(f"Video saved to: {video_path!s}")
+    target_v_mean = reference_hsv_mean[2]
+
+    for index, image_path in enumerate(images):
+        original = cv2.imread(str(image_path))
+        if original is None:
+            raise RuntimeError(f"Failed to read image {image_path!s}")
+
+        if index < reference_count:
+            adjusted = original.copy()
+        else:
+            adjusted = adjust_v_channel_to_mean(original, target_v_mean)
+
+        adjusted_filename = f"{image_path.stem}_adjust{image_path.suffix}"
+        adjusted_image_path = adjust_dir / adjusted_filename
+        if not cv2.imwrite(str(adjusted_image_path), adjusted):
+            raise RuntimeError(f"Failed to write adjusted image to {adjusted_image_path!s}")
+
+        origin_output_image = originmask_dir / image_path.name
+        origin_output_txt = originmask_dir / f"{image_path.stem}.txt"
+        run_detection_and_save(model, original, origin_output_image, origin_output_txt)
+
+        adjust_output_image = adjustmask_dir / adjusted_filename
+        adjust_output_txt = adjustmask_dir / f"{image_path.stem}_adjust.txt"
+        run_detection_and_save(model, adjusted, adjust_output_image, adjust_output_txt)
+
+    print("Processing complete.")
+    print(f"Adjusted images saved to: {adjust_dir!s}")
+    print(f"Original detections saved to: {originmask_dir!s}")
+    print(f"Adjusted detections saved to: {adjustmask_dir!s}")
 
 
 if __name__ == "__main__":
