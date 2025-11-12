@@ -11,7 +11,7 @@ import numpy as np
 from ultralytics import YOLO
 
 
-DEFAULT_MODEL_PATH = "/home/wensheng/jiaqi/ultralytics/runs/detect/train25/weights/best.pt"
+DEFAULT_MODEL_PATH = "/home/wensheng/jiaqi/ultralytics/runs/detect/train13/weights/best.pt"
 DEFAULT_SOURCE_DIR = "/home/wensheng/jiaqi/ultralytics/video"
 
 
@@ -278,9 +278,9 @@ def main() -> None:
 
     model = YOLO(args.model)
 
-    adjust_dir = Path("/video/output/adjust")
-    originmask_dir = Path("/video/output/originmask")
-    adjustmask_dir = Path("/video/output/adjustmask")
+    adjust_dir = Path("/home/wensheng/jiaqi/ultralytics/video/output/adjust")
+    originmask_dir = Path("/home/wensheng/jiaqi/ultralytics/video/output/originmask")
+    adjustmask_dir = Path("/home/wensheng/jiaqi/ultralytics/video/output/adjustmask")
 
     for directory in (adjust_dir, originmask_dir, adjustmask_dir):
         directory.mkdir(parents=True, exist_ok=True)
@@ -330,6 +330,7 @@ def main() -> None:
                     origin_annotated.shape[0] != writer_height
                     or origin_annotated.shape[1] != writer_width
                 ):
+                    #print(origin_annotated.shape[0],origin_annotated.shape[1],writer_height,writer_width)
                     raise RuntimeError("Annotated frame size changed during processing for original video.")
 
             origin_writer.write(origin_annotated)
