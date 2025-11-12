@@ -1,0 +1,5 @@
+epoch,time,train/box_loss,train/cls_loss,train/dfl_loss,metrics/precision(B),metrics/recall(B),metrics/precision@0.4(B),metrics/recall@0.4(B),metrics/mAP50(B),metrics/mAP50-95(B),val/box_loss,val/cls_loss,val/dfl_loss,best_epoch,lr/pg0,lr/pg1,lr/pg2
+1,63.1344,1.81106,2.70237,1.24432,0,0,0,0,0,0,4.36196,inf,3.79589,1,0.000324561,0.000324561,0.000324561
+2,85.8598,1.34599,1.43596,1.01957,0,0,0,0,0,0,nan,nan,nan,2,0.000656809,0.000656809,0.000656809
+3,158.884,1.33469,1.33921,1.00413,0,0,0,0,0,0,nan,nan,nan,3,0.000987957,0.000987957,0.000987957
+4,197.658,1.43244,1.42577,1.06325,0.23006,0.29735,0.26476,0.23822,0.1682,0.12005,nan,nan,nan,4,0.00099505,0.00099505,0.00099505
