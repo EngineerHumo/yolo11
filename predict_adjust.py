@@ -210,7 +210,7 @@ def run_detection_and_save(
     image: np.ndarray,
     output_image_path: Path,
     output_txt_path: Path,
-) -> None:
+) -> np.ndarray:
     cropped = crop_bottom_rows(image)
     detections = model.predict(source=cropped, verbose=False, save=False)
 
@@ -260,6 +260,8 @@ def run_detection_and_save(
     with output_txt_path.open("w", encoding="utf-8") as file:
         file.write("\n".join(yolo_records))
 
+    return annotated
+
 
 def main() -> None:
     args = parse_args()
@@ -285,33 +287,88 @@ def main() -> None:
 
     target_v_mean = reference_hsv_mean[2]
 
-    for index, image_path in enumerate(images):
-        original = cv2.imread(str(image_path))
-        if original is None:
-            raise RuntimeError(f"Failed to read image {image_path!s}")
+    fps = 25.0
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    origin_video_path = originmask_dir / "predict.mp4"
+    adjust_video_path = adjustmask_dir / "predict_adjust.mp4"
+    origin_writer: cv2.VideoWriter | None = None
+    adjust_writer: cv2.VideoWriter | None = None
 
-        if index < reference_count:
-            adjusted = original.copy()
-        else:
-            adjusted = adjust_v_channel_to_mean(original, target_v_mean)
+    try:
+        for index, image_path in enumerate(images):
+            original = cv2.imread(str(image_path))
+            if original is None:
+                raise RuntimeError(f"Failed to read image {image_path!s}")
 
-        adjusted_filename = f"{image_path.stem}_adjust{image_path.suffix}"
-        adjusted_image_path = adjust_dir / adjusted_filename
-        if not cv2.imwrite(str(adjusted_image_path), adjusted):
-            raise RuntimeError(f"Failed to write adjusted image to {adjusted_image_path!s}")
+            if index < reference_count:
+                adjusted = original.copy()
+            else:
+                adjusted = adjust_v_channel_to_mean(original, target_v_mean)
 
-        origin_output_image = originmask_dir / image_path.name
-        origin_output_txt = originmask_dir / f"{image_path.stem}.txt"
-        run_detection_and_save(model, original, origin_output_image, origin_output_txt)
+            adjusted_filename = f"{image_path.stem}_adjust{image_path.suffix}"
+            adjusted_image_path = adjust_dir / adjusted_filename
+            if not cv2.imwrite(str(adjusted_image_path), adjusted):
+                raise RuntimeError(f"Failed to write adjusted image to {adjusted_image_path!s}")
 
-        adjust_output_image = adjustmask_dir / adjusted_filename
-        adjust_output_txt = adjustmask_dir / f"{image_path.stem}_adjust.txt"
-        run_detection_and_save(model, adjusted, adjust_output_image, adjust_output_txt)
+            origin_output_image = originmask_dir / image_path.name
+            origin_output_txt = originmask_dir / f"{image_path.stem}.txt"
+            origin_annotated = run_detection_and_save(
+                model, original, origin_output_image, origin_output_txt
+            )
+
+            if origin_writer is None:
+                frame_size = (origin_annotated.shape[1], origin_annotated.shape[0])
+                origin_writer = cv2.VideoWriter(
+                    str(origin_video_path), fourcc, fps, frame_size
+                )
+                if not origin_writer.isOpened():
+                    raise RuntimeError(f"Failed to open video writer for {origin_video_path!s}")
+            else:
+                writer_height = int(round(origin_writer.get(cv2.CAP_PROP_FRAME_HEIGHT)))
+                writer_width = int(round(origin_writer.get(cv2.CAP_PROP_FRAME_WIDTH)))
+                if (
+                    origin_annotated.shape[0] != writer_height
+                    or origin_annotated.shape[1] != writer_width
+                ):
+                    raise RuntimeError("Annotated frame size changed during processing for original video.")
+
+            origin_writer.write(origin_annotated)
+
+            adjust_output_image = adjustmask_dir / adjusted_filename
+            adjust_output_txt = adjustmask_dir / f"{image_path.stem}_adjust.txt"
+            adjust_annotated = run_detection_and_save(
+                model, adjusted, adjust_output_image, adjust_output_txt
+            )
+
+            if adjust_writer is None:
+                frame_size = (adjust_annotated.shape[1], adjust_annotated.shape[0])
+                adjust_writer = cv2.VideoWriter(
+                    str(adjust_video_path), fourcc, fps, frame_size
+                )
+                if not adjust_writer.isOpened():
+                    raise RuntimeError(f"Failed to open video writer for {adjust_video_path!s}")
+            else:
+                writer_height = int(round(adjust_writer.get(cv2.CAP_PROP_FRAME_HEIGHT)))
+                writer_width = int(round(adjust_writer.get(cv2.CAP_PROP_FRAME_WIDTH)))
+                if (
+                    adjust_annotated.shape[0] != writer_height
+                    or adjust_annotated.shape[1] != writer_width
+                ):
+                    raise RuntimeError("Annotated frame size changed during processing for adjusted video.")
+
+            adjust_writer.write(adjust_annotated)
+    finally:
+        if origin_writer is not None:
+            origin_writer.release()
+        if adjust_writer is not None:
+            adjust_writer.release()
 
     print("Processing complete.")
     print(f"Adjusted images saved to: {adjust_dir!s}")
     print(f"Original detections saved to: {originmask_dir!s}")
     print(f"Adjusted detections saved to: {adjustmask_dir!s}")
+    print(f"Original detection video: {origin_video_path!s}")
+    print(f"Adjusted detection video: {adjust_video_path!s}")
 
 
 if __name__ == "__main__":
