@@ -1,14 +1,14 @@
 """Predict script for running YOLO detections on a directory of images and saving results in YOLO format."""
+
 from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from typing import List
 
 import cv2
 import numpy as np
-from ultralytics import YOLO
 
+from ultralytics import YOLO
 
 DEFAULT_MODEL_PATH = "/home/wensheng/jiaqi/ultralytics/runs/detect/train13/weights/best.pt"
 DEFAULT_SOURCE_DIR = "/home/wensheng/jiaqi/ultralytics/video"
@@ -37,11 +37,9 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def collect_images(source_dir: Path) -> List[Path]:
-    images: List[Path] = sorted(
-        path
-        for path in source_dir.iterdir()
-        if path.is_file() and path.suffix.lower() == ".jpg"
+def collect_images(source_dir: Path) -> list[Path]:
+    images: list[Path] = sorted(
+        path for path in source_dir.iterdir() if path.is_file() and path.suffix.lower() == ".jpg"
     )
     if not images:
         raise FileNotFoundError(f"No JPG images found in {source_dir!s}")
@@ -54,12 +52,10 @@ def run_inference(model: YOLO, image: np.ndarray):
 
 def prepare_image(image: np.ndarray) -> np.ndarray:
     """Crop and resize the image to the 1240x1240 target required by the pipeline."""
-
-    height, width = image.shape[:2]
+    height, _width = image.shape[:2]
     if height <= BOTTOM_CROP_PIXELS:
         raise ValueError(
-            "Image height must be greater than the bottom crop value of"
-            f" {BOTTOM_CROP_PIXELS}, got {height}."
+            f"Image height must be greater than the bottom crop value of {BOTTOM_CROP_PIXELS}, got {height}."
         )
 
     cropped = image[: height - BOTTOM_CROP_PIXELS, :, :]
@@ -85,12 +81,10 @@ def save_detections_to_txt(output_path: Path, detections) -> None:
             boxes_np = boxes.cpu().numpy()
             class_ids_list = class_ids.int().cpu().tolist()
             for class_id, (x_center, y_center, width, height) in zip(class_ids_list, boxes_np):
-                file.write(
-                    f"{class_id} {x_center:.6f} {y_center:.6f} {width:.6f} {height:.6f}\n"
-                )
+                file.write(f"{class_id} {x_center:.6f} {y_center:.6f} {width:.6f} {height:.6f}\n")
 
 
-def process_images(model: YOLO, images: List[Path], output_dir: Path) -> None:
+def process_images(model: YOLO, images: list[Path], output_dir: Path) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     for image_path in images:
         image = cv2.imread(str(image_path))
@@ -112,10 +106,7 @@ def main() -> None:
     images = collect_images(source_dir)
     process_images(model, images, OUTPUT_DIR)
 
-    print(
-        "Cropped 1240x1240 images and YOLO txt files saved to"
-        f" {OUTPUT_DIR!s}."
-    )
+    print(f"Cropped 1240x1240 images and YOLO txt files saved to {OUTPUT_DIR!s}.")
 
 
 if __name__ == "__main__":
