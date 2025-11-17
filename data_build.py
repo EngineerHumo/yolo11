@@ -12,7 +12,7 @@ from typing import Any
 
 LABEL_MAP = {"old": 0, "1": 1, "2": 2, "2+": 3, "3": 4, "3+": 5}
 IMAGE_SIZE = 1240
-GROUP_SIZE = 8
+GROUP_SIZE = 6
 VAL_RATIO = 1  # number of images per group that go to validation
 
 
