@@ -11,7 +11,7 @@ import numpy as np
 from ultralytics import YOLO
 
 
-DEFAULT_MODEL_PATH = "/home/wensheng/jiaqi/ultralytics/runs/detect/train25/weights/best.pt"
+DEFAULT_MODEL_PATH = "/home/wensheng/jiaqi/ultralytics/runs/detect/train65/weights/best.pt"
 DEFAULT_SOURCE_DIR = "/home/wensheng/jiaqi/ultralytics/video"
 DEFAULT_OUTPUT_SUBDIR = "predictions"
 DEFAULT_VIDEO_NAME = "predictions.mp4"
