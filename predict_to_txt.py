@@ -14,7 +14,6 @@ DEFAULT_MODEL_PATH = "/home/wensheng/jiaqi/ultralytics/runs/detect/train65/weigh
 DEFAULT_SOURCE_DIR = "/home/wensheng/jiaqi/ultralytics/video"
 OUTPUT_DIR = Path("/home/wensheng/jiaqi/ultralytics/output_txt")
 
-BOTTOM_CROP_PIXELS = 38
 TARGET_IMAGE_SIZE = 1240
 
 
@@ -53,54 +52,129 @@ def run_inference(model: YOLO, image: np.ndarray):
 
 
 def prepare_image(image: np.ndarray) -> np.ndarray:
-    """Crop and resize the image to the 1240x1240 target required by the pipeline."""
+    """Ensure the input image is resized to the 1240x1240 target size."""
 
-    height, width = image.shape[:2]
-    if height <= BOTTOM_CROP_PIXELS:
-        raise ValueError(
-            "Image height must be greater than the bottom crop value of"
-            f" {BOTTOM_CROP_PIXELS}, got {height}."
-        )
-
-    cropped = image[: height - BOTTOM_CROP_PIXELS, :, :]
-
-    if cropped.shape[0] != TARGET_IMAGE_SIZE or cropped.shape[1] != TARGET_IMAGE_SIZE:
-        cropped = cv2.resize(
-            cropped,
+    if image.shape[0] != TARGET_IMAGE_SIZE or image.shape[1] != TARGET_IMAGE_SIZE:
+        return cv2.resize(
+            image,
             (TARGET_IMAGE_SIZE, TARGET_IMAGE_SIZE),
             interpolation=cv2.INTER_LINEAR,
         )
 
-    return cropped
+    return image
+
+
+def draw_detections(image: np.ndarray, detections) -> np.ndarray:
+    """Draw bounding boxes with class labels and confidence on the image."""
+
+    colors = (
+        (255, 0, 0),
+        (0, 255, 0),
+        (0, 0, 255),
+        (255, 255, 0),
+        (255, 0, 255),
+        (0, 255, 255),
+    )
+
+    annotated = image.copy()
+    for result in detections:
+        boxes = getattr(result.boxes, "xyxy", None)
+        class_ids = getattr(result.boxes, "cls", None)
+        confidences = getattr(result.boxes, "conf", None)
+        if boxes is None or class_ids is None or confidences is None:
+            continue
+
+        boxes_np = boxes.cpu().numpy()
+        class_ids_list = class_ids.int().cpu().tolist()
+        confidences_list = confidences.cpu().tolist()
+
+        for class_id, conf, (x1, y1, x2, y2) in zip(
+            class_ids_list, confidences_list, boxes_np
+        ):
+            color = colors[class_id % len(colors)]
+            cv2.rectangle(annotated, (int(x1), int(y1)), (int(x2), int(y2)), color, 2)
+            label = f"{class_id}:{conf:.2f}"
+            cv2.putText(
+                annotated,
+                label,
+                (int(x1), max(0, int(y1) - 10)),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                color,
+                2,
+                cv2.LINE_AA,
+            )
+
+    return annotated
+
+
+def save_video_from_images(image_paths: List[Path], output_dir: Path) -> None:
+    if not image_paths:
+        return
+
+    first_image = cv2.imread(str(image_paths[0]))
+    if first_image is None:
+        raise RuntimeError(f"Failed to read image {image_paths[0]!s}")
+
+    height, width = first_image.shape[:2]
+    video_path = output_dir / "output.mp4"
+    writer = cv2.VideoWriter(
+        str(video_path),
+        cv2.VideoWriter_fourcc(*"mp4v"),
+        20.0,
+        (width, height),
+    )
+
+    try:
+        for image_path in image_paths:
+            frame = cv2.imread(str(image_path))
+            if frame is None:
+                continue
+            writer.write(frame)
+    finally:
+        writer.release()
 
 
 def save_detections_to_txt(output_path: Path, detections) -> None:
+    """Persist detections in YOLO txt format including confidence for each box."""
+
     txt_path = output_path.with_suffix(".txt")
     with open(txt_path, "w", encoding="utf-8") as file:
         for result in detections:
             boxes = getattr(result.boxes, "xywhn", None)
             class_ids = getattr(result.boxes, "cls", None)
-            if boxes is None or class_ids is None:
+            confidences = getattr(result.boxes, "conf", None)
+            if boxes is None or class_ids is None or confidences is None:
                 continue
+
             boxes_np = boxes.cpu().numpy()
             class_ids_list = class_ids.int().cpu().tolist()
-            for class_id, (x_center, y_center, width, height) in zip(class_ids_list, boxes_np):
+            confidences_list = confidences.cpu().tolist()
+
+            for class_id, conf, (x_center, y_center, width, height) in zip(
+                class_ids_list, confidences_list, boxes_np
+            ):
                 file.write(
-                    f"{class_id} {x_center:.6f} {y_center:.6f} {width:.6f} {height:.6f}\n"
+                    f"{class_id} {x_center:.6f} {y_center:.6f} {width:.6f} {height:.6f} {conf:.6f}\n"
                 )
 
 
 def process_images(model: YOLO, images: List[Path], output_dir: Path) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
+    saved_images: List[Path] = []
     for image_path in images:
         image = cv2.imread(str(image_path))
         if image is None:
             raise RuntimeError(f"Failed to read image {image_path!s}")
         processed_image = prepare_image(image)
         detections = run_inference(model, processed_image)
+        annotated_image = draw_detections(processed_image, detections)
         output_image_path = output_dir / image_path.name
-        cv2.imwrite(str(output_image_path), processed_image)
+        cv2.imwrite(str(output_image_path), annotated_image)
+        saved_images.append(output_image_path)
         save_detections_to_txt(output_image_path, detections)
+
+    save_video_from_images(saved_images, output_dir)
 
 
 def main() -> None:
@@ -112,10 +186,7 @@ def main() -> None:
     images = collect_images(source_dir)
     process_images(model, images, OUTPUT_DIR)
 
-    print(
-        "Cropped 1240x1240 images and YOLO txt files saved to"
-        f" {OUTPUT_DIR!s}."
-    )
+    print("Annotated images, video, and YOLO txt files saved to", f"{OUTPUT_DIR!s}.")
 
 
 if __name__ == "__main__":
