@@ -1,0 +1,50 @@
+Collecting package metadata (current_repodata.json): ...working... done
+Solving environment: ...working... failed with initial frozen solve. Retrying with flexible solve.
+Solving environment: ...working... failed with repodata from current_repodata.json, will retry with next repodata source.
+Collecting package metadata (repodata.json): ...working... done
+Solving environment: ...working... done
+
+## Package Plan ##
+
+  environment location: /opt/anaconda3/envs/yolo
+
+  added / updated specs:
+    - onnx
+    - onnxruntime
+
+
+The following packages will be downloaded:
+
+    package                    |            build
+    ---------------------------|-----------------
+    ca-certificates-2025.11.4  |       h06a4308_0         128 KB  defaults
+    coloredlogs-15.0.1         |   py39h06a4308_3          66 KB  defaults
+    humanfriendly-10.0         |   py39h06a4308_2         126 KB  defaults
+    onnx-1.18.0                |   py39h540e5eb_0        10.4 MB  defaults
+    onnxruntime-1.20.1         |   py39hce09735_0        12.2 MB  defaults
+    packaging-25.0             |   py39h06a4308_1         160 KB  defaults
+    protobuf-5.29.3            |   py39he621ea3_0         593 KB  defaults
+    python-flatbuffers-24.3.25 |   py39h06a4308_0          55 KB  defaults
+    typing-extensions-4.15.0   |   py39h06a4308_0          11 KB  defaults
+    ------------------------------------------------------------
+                                           Total:        23.7 MB
+
+The following NEW packages will be INSTALLED:
+
+  coloredlogs        pkgs/main/linux-64::coloredlogs-15.0.1-py39h06a4308_3
+  humanfriendly      pkgs/main/linux-64::humanfriendly-10.0-py39h06a4308_2
+  libabseil          pkgs/main/linux-64::libabseil-20250127.0-cxx17_h6a678d5_0
+  libprotobuf        pkgs/main/linux-64::libprotobuf-5.29.3-h3cdef7c_1
+  onnx               pkgs/main/linux-64::onnx-1.18.0-py39h540e5eb_0
+  onnxruntime        pkgs/main/linux-64::onnxruntime-1.20.1-py39hce09735_0
+  packaging          pkgs/main/linux-64::packaging-25.0-py39h06a4308_1
+  protobuf           pkgs/main/linux-64::protobuf-5.29.3-py39he621ea3_0
+  python-flatbuffers pkgs/main/linux-64::python-flatbuffers-24.3.25-py39h06a4308_0
+  typing-extensions  pkgs/main/linux-64::typing-extensions-4.15.0-py39h06a4308_0
+
+The following packages will be UPDATED:
+
+  ca-certificates                       2025.9.9-h06a4308_0 --> 2025.11.4-h06a4308_0
+
+
+Proceed ([y]/n)? 

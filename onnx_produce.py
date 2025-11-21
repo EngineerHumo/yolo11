@@ -11,7 +11,7 @@ from ultralytics import YOLO
 # Paths for training weights, export target, and ONNX inference source/output
 TRAINED_MODEL_PATH = Path("/home/wensheng/jiaqi/ultralytics/runs/detect/train65/weights/best.pt")
 ONNX_MODEL_PATH = Path("/home/wensheng/jiaqi/ultralytics/runs/detect/train65/weights/best.onnx")
-ONNX_SOURCE_DIR = Path("/home/wensheng/jiaqi/ultralytics/video_onnx")
+ONNX_SOURCE_DIR = Path("/home/wensheng/jiaqi/ultralytics/data/train/image")
 ONNX_OUTPUT_DIR = Path("/home/wensheng/jiaqi/ultralytics/output_onnx")
 
 # Preprocess to align with predict_to_txt.py
@@ -32,7 +32,7 @@ def prepare_image(image: np.ndarray) -> np.ndarray:
 
 def collect_images(source_dir: Path) -> List[Path]:
     images: List[Path] = sorted(
-        path for path in source_dir.iterdir() if path.is_file() and path.suffix.lower() == ".jpg"
+        path for path in source_dir.iterdir() if path.is_file() and path.suffix.lower() == ".png"
     )
     if not images:
         raise FileNotFoundError(f"No JPG images found in {source_dir!s}")
