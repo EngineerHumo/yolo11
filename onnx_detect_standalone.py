@@ -77,8 +77,6 @@ class ONNXDetector:
             return []
 
         preds = outputs[0]
-        if preds.ndim == 3 and preds.shape[1] != 0 and preds.shape[1] < preds.shape[2]:
-            preds = np.transpose(preds, (0, 2, 1))
 
         preds_tensor = torch.from_numpy(preds)
         nms_results = ops.non_max_suppression(
