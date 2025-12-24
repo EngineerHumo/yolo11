@@ -1,15 +1,15 @@
-"""Predict script for running YOLO detections on a directory of images.
-"""
+"""Predict script for running YOLO detections on a directory of images."""
+
 from __future__ import annotations
 
 import argparse
+from collections.abc import Iterable, Sequence
 from pathlib import Path
-from typing import Iterable, List, Sequence, Set
 
 import cv2
 import numpy as np
-from ultralytics import YOLO
 
+from ultralytics import YOLO
 
 DEFAULT_MODEL_PATH = "/home/wensheng/jiaqi/ultralytics/runs/detect/train65/weights/best.pt"
 DEFAULT_SOURCE_DIR = "/home/wensheng/jiaqi/ultralytics/video"
@@ -47,11 +47,9 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def collect_images(source_dir: Path) -> List[Path]:
-    images: List[Path] = sorted(
-        path
-        for path in source_dir.iterdir()
-        if path.is_file() and path.suffix.lower() == ".jpg"
+def collect_images(source_dir: Path) -> list[Path]:
+    images: list[Path] = sorted(
+        path for path in source_dir.iterdir() if path.is_file() and path.suffix.lower() == ".jpg"
     )
     if not images:
         raise FileNotFoundError(f"No JPG images found in {source_dir!s}")
@@ -94,9 +92,7 @@ def color_for_class(class_id: int) -> tuple[int, int, int]:
 
 def crop_bottom_rows(image: np.ndarray, rows_to_remove: int = 38) -> np.ndarray:
     if image.shape[0] <= rows_to_remove:
-        raise ValueError(
-            f"Image height {image.shape[0]} is not greater than rows_to_remove={rows_to_remove}."
-        )
+        raise ValueError(f"Image height {image.shape[0]} is not greater than rows_to_remove={rows_to_remove}.")
     return image[: image.shape[0] - rows_to_remove, :, :]
 
 
@@ -111,10 +107,8 @@ def ensure_size(image: np.ndarray, width: int, height: int) -> tuple[np.ndarray,
     return resized, scale_x, scale_y
 
 
-def draw_legend(
-    image: np.ndarray, class_ids: Iterable[int], class_names: Sequence[str] | dict[int, str]
-) -> np.ndarray:
-    unique_ids: List[int] = sorted(set(class_ids))
+def draw_legend(image: np.ndarray, class_ids: Iterable[int], class_names: Sequence[str] | dict[int, str]) -> np.ndarray:
+    unique_ids: list[int] = sorted(set(class_ids))
     if not unique_ids:
         return image
 
@@ -122,23 +116,19 @@ def draw_legend(
     font = cv2.FONT_HERSHEY_SIMPLEX
     scale_base = max(image.shape[0], image.shape[1]) / 1000.0
     font_scale = max(0.4, 0.5 * scale_base)
-    thickness = max(1, int(round(font_scale * 2)))
-    box_edge = int(round(18 * scale_base))
+    thickness = max(1, round(font_scale * 2))
+    box_edge = round(18 * scale_base)
     box_edge = max(box_edge, 12)
 
-    text_widths: List[int] = []
-    legend_labels: List[str] = []
+    text_widths: list[int] = []
+    legend_labels: list[str] = []
     for class_id in unique_ids:
         name = class_names[class_id] if isinstance(class_names, dict) else class_names[class_id]
         legend_labels.append(name)
-        (text_width, text_height), _ = cv2.getTextSize(name, font, font_scale, thickness)
+        (text_width, _text_height), _ = cv2.getTextSize(name, font, font_scale, thickness)
         text_widths.append(text_width)
 
-    legend_width = (
-        3 * legend_padding
-        + box_edge
-        + (max(text_widths) if text_widths else 0)
-    )
+    legend_width = 3 * legend_padding + box_edge + (max(text_widths) if text_widths else 0)
     legend_height = legend_padding + len(unique_ids) * (box_edge + legend_padding)
 
     start_x = max(image.shape[1] - legend_width - legend_padding, 0)
@@ -172,23 +162,23 @@ def draw_boxes(
     classes: Sequence[int],
     scale_x: float,
     scale_y: float,
-) -> tuple[np.ndarray, Set[int]]:
+) -> tuple[np.ndarray, set[int]]:
     annotated = image.copy()
-    present_classes: Set[int] = set()
+    present_classes: set[int] = set()
     for box, class_id in zip(boxes, classes):
         x1, y1, x2, y2 = box.astype(float)
-        x1 = int(round(x1 * scale_x))
-        y1 = int(round(y1 * scale_y))
-        x2 = int(round(x2 * scale_x))
-        y2 = int(round(y2 * scale_y))
+        x1 = round(x1 * scale_x)
+        y1 = round(y1 * scale_y)
+        x2 = round(x2 * scale_x)
+        y2 = round(y2 * scale_y)
         color = color_for_class(int(class_id))
         cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
         present_classes.add(int(class_id))
     return annotated, present_classes
 
 
-def save_annotated_images(model: YOLO, images: List[Path], output_dir: Path) -> List[Path]:
-    saved_images: List[Path] = []
+def save_annotated_images(model: YOLO, images: list[Path], output_dir: Path) -> list[Path]:
+    saved_images: list[Path] = []
     for image_path in images:
         original = cv2.imread(str(image_path))
         if original is None:
@@ -203,7 +193,7 @@ def save_annotated_images(model: YOLO, images: List[Path], output_dir: Path) -> 
         names = detections[0].names if detections else {}
 
         annotated = resized
-        image_classes: Set[int] = set()
+        image_classes: set[int] = set()
         for result in detections:
             if result.boxes is None or result.boxes.xyxy is None:
                 continue
@@ -221,7 +211,7 @@ def save_annotated_images(model: YOLO, images: List[Path], output_dir: Path) -> 
     return saved_images
 
 
-def build_video_from_images(images: List[Path], output_path: Path, fps: float) -> None:
+def build_video_from_images(images: list[Path], output_path: Path, fps: float) -> None:
     first_image = cv2.imread(str(images[0]))
     if first_image is None:
         raise RuntimeError(f"Unable to read the first annotated image {images[0]!s}")
