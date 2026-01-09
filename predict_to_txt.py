@@ -1,14 +1,14 @@
 """Predict script for running YOLO detections on a directory of images and saving results in YOLO format."""
+
 from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from typing import List
 
 import cv2
 import numpy as np
-from ultralytics import YOLO
 
+from ultralytics import YOLO
 
 DEFAULT_MODEL_PATH = "/home/wensheng/jiaqi/ultralytics/runs/detect/train65/weights/best.pt"
 DEFAULT_SOURCE_DIR = "/home/wensheng/jiaqi/ultralytics/video"
@@ -36,11 +36,9 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def collect_images(source_dir: Path) -> List[Path]:
-    images: List[Path] = sorted(
-        path
-        for path in source_dir.iterdir()
-        if path.is_file() and path.suffix.lower() == ".jpg"
+def collect_images(source_dir: Path) -> list[Path]:
+    images: list[Path] = sorted(
+        path for path in source_dir.iterdir() if path.is_file() and path.suffix.lower() == ".jpg"
     )
     if not images:
         raise FileNotFoundError(f"No JPG images found in {source_dir!s}")
@@ -53,7 +51,6 @@ def run_inference(model: YOLO, image: np.ndarray):
 
 def prepare_image(image: np.ndarray) -> np.ndarray:
     """Ensure the input image is resized to the 1240x1240 target size."""
-
     if image.shape[0] != TARGET_IMAGE_SIZE or image.shape[1] != TARGET_IMAGE_SIZE:
         return cv2.resize(
             image,
@@ -66,7 +63,6 @@ def prepare_image(image: np.ndarray) -> np.ndarray:
 
 def draw_detections(image: np.ndarray, detections) -> np.ndarray:
     """Draw bounding boxes with class labels and confidence on the image."""
-
     colors = (
         (255, 0, 0),
         (0, 255, 0),
@@ -88,9 +84,7 @@ def draw_detections(image: np.ndarray, detections) -> np.ndarray:
         class_ids_list = class_ids.int().cpu().tolist()
         confidences_list = confidences.cpu().tolist()
 
-        for class_id, conf, (x1, y1, x2, y2) in zip(
-            class_ids_list, confidences_list, boxes_np
-        ):
+        for class_id, conf, (x1, y1, x2, y2) in zip(class_ids_list, confidences_list, boxes_np):
             color = colors[class_id % len(colors)]
             cv2.rectangle(annotated, (int(x1), int(y1)), (int(x2), int(y2)), color, 2)
             label = f"{class_id}:{conf:.2f}"
@@ -108,7 +102,7 @@ def draw_detections(image: np.ndarray, detections) -> np.ndarray:
     return annotated
 
 
-def save_video_from_images(image_paths: List[Path], output_dir: Path) -> None:
+def save_video_from_images(image_paths: list[Path], output_dir: Path) -> None:
     if not image_paths:
         return
 
@@ -137,7 +131,6 @@ def save_video_from_images(image_paths: List[Path], output_dir: Path) -> None:
 
 def save_detections_to_txt(output_path: Path, detections) -> None:
     """Persist detections in YOLO txt format including confidence for each box."""
-
     txt_path = output_path.with_suffix(".txt")
     with open(txt_path, "w", encoding="utf-8") as file:
         for result in detections:
@@ -151,17 +144,13 @@ def save_detections_to_txt(output_path: Path, detections) -> None:
             class_ids_list = class_ids.int().cpu().tolist()
             confidences_list = confidences.cpu().tolist()
 
-            for class_id, conf, (x_center, y_center, width, height) in zip(
-                class_ids_list, confidences_list, boxes_np
-            ):
-                file.write(
-                    f"{class_id} {x_center:.6f} {y_center:.6f} {width:.6f} {height:.6f} {conf:.6f}\n"
-                )
+            for class_id, conf, (x_center, y_center, width, height) in zip(class_ids_list, confidences_list, boxes_np):
+                file.write(f"{class_id} {x_center:.6f} {y_center:.6f} {width:.6f} {height:.6f} {conf:.6f}\n")
 
 
-def process_images(model: YOLO, images: List[Path], output_dir: Path) -> None:
+def process_images(model: YOLO, images: list[Path], output_dir: Path) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
-    saved_images: List[Path] = []
+    saved_images: list[Path] = []
     for image_path in images:
         image = cv2.imread(str(image_path))
         if image is None:
