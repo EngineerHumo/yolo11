@@ -7,13 +7,14 @@ rescaling, visualization, and TXT export for every image in a target directory.
 from __future__ import annotations
 
 import argparse
+from collections.abc import Sequence
 from pathlib import Path
-from typing import List, Sequence, Tuple
 
 import cv2
 import numpy as np
 import onnxruntime as ort
 import torch
+
 from ultralytics.utils import ops
 
 DEFAULT_MODEL_PATH = "/home/wensheng/jiaqi/ultralytics/runs/detect/train65/weights/best.onnx"
@@ -38,10 +39,8 @@ class ONNXDetector:
         providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
         return ort.InferenceSession(str(self.model_path), providers=providers)
 
-    def preprocess(self, image: np.ndarray) -> Tuple[np.ndarray, Tuple[float, float]]:
-        resized = cv2.resize(
-            image, (TARGET_IMAGE_SIZE, TARGET_IMAGE_SIZE), interpolation=cv2.INTER_LINEAR
-        )
+    def preprocess(self, image: np.ndarray) -> tuple[np.ndarray, tuple[float, float]]:
+        resized = cv2.resize(image, (TARGET_IMAGE_SIZE, TARGET_IMAGE_SIZE), interpolation=cv2.INTER_LINEAR)
         scale_x = image.shape[1] / TARGET_IMAGE_SIZE
         scale_y = image.shape[0] / TARGET_IMAGE_SIZE
 
@@ -49,13 +48,13 @@ class ONNXDetector:
         chw = np.transpose(rgb, (2, 0, 1))[None, ...]
         return chw, (scale_x, scale_y)
 
-    def _run_session(self, input_tensor: np.ndarray) -> List[np.ndarray]:
+    def _run_session(self, input_tensor: np.ndarray) -> list[np.ndarray]:
         return self.session.run(None, {self.input_name: input_tensor})
 
     def _postprocess_with_nms_layer(
         self, outputs: Sequence[np.ndarray]
-    ) -> List[Tuple[np.ndarray, np.ndarray, np.ndarray]]:
-        detections: List[Tuple[np.ndarray, np.ndarray, np.ndarray]] = []
+    ) -> list[tuple[np.ndarray, np.ndarray, np.ndarray]]:
+        detections: list[tuple[np.ndarray, np.ndarray, np.ndarray]] = []
         if not outputs:
             return detections
 
@@ -70,20 +69,16 @@ class ONNXDetector:
         detections.append((boxes[mask], scores[mask], class_ids[mask]))
         return detections
 
-    def _postprocess_manual_nms(
-        self, outputs: Sequence[np.ndarray]
-    ) -> List[Tuple[np.ndarray, np.ndarray, np.ndarray]]:
+    def _postprocess_manual_nms(self, outputs: Sequence[np.ndarray]) -> list[tuple[np.ndarray, np.ndarray, np.ndarray]]:
         if not outputs:
             return []
 
         preds = outputs[0]
 
         preds_tensor = torch.from_numpy(preds)
-        nms_results = ops.non_max_suppression(
-            preds_tensor, conf_thres=self.conf_thres, iou_thres=self.iou_thres
-        )
+        nms_results = ops.non_max_suppression(preds_tensor, conf_thres=self.conf_thres, iou_thres=self.iou_thres)
 
-        detections: List[Tuple[np.ndarray, np.ndarray, np.ndarray]] = []
+        detections: list[tuple[np.ndarray, np.ndarray, np.ndarray]] = []
         for result in nms_results:
             if result is None or len(result) == 0:
                 detections.append((np.empty((0, 4)), np.empty((0,)), np.empty((0,), dtype=int)))
@@ -94,23 +89,21 @@ class ONNXDetector:
             detections.append((boxes, scores, class_ids))
         return detections
 
-    def postprocess(
-        self, outputs: Sequence[np.ndarray]
-    ) -> List[Tuple[np.ndarray, np.ndarray, np.ndarray]]:
+    def postprocess(self, outputs: Sequence[np.ndarray]) -> list[tuple[np.ndarray, np.ndarray, np.ndarray]]:
         first = outputs[0] if outputs else None
         if first is not None and first.shape[-1] == 6:
             return self._postprocess_with_nms_layer(outputs)
         return self._postprocess_manual_nms(outputs)
 
-    def predict(self, image: np.ndarray) -> List[Tuple[np.ndarray, np.ndarray, np.ndarray]]:
+    def predict(self, image: np.ndarray) -> list[tuple[np.ndarray, np.ndarray, np.ndarray]]:
         input_tensor, scales = self.preprocess(image)
         raw_outputs = self._run_session(input_tensor)
         detections = self.postprocess(raw_outputs)
         return [self._scale_boxes(d, scales) for d in detections]
 
     def _scale_boxes(
-        self, detection: Tuple[np.ndarray, np.ndarray, np.ndarray], scales: Tuple[float, float]
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        self, detection: tuple[np.ndarray, np.ndarray, np.ndarray], scales: tuple[float, float]
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         boxes, scores, class_ids = detection
         if boxes.size == 0:
             return boxes, scores, class_ids
@@ -120,18 +113,16 @@ class ONNXDetector:
         boxes_scaled[:, [0, 2]] *= scale_x
         boxes_scaled[:, [1, 3]] *= scale_y
 
-        width = int(round(scale_x * TARGET_IMAGE_SIZE))
-        height = int(round(scale_y * TARGET_IMAGE_SIZE))
+        width = round(scale_x * TARGET_IMAGE_SIZE)
+        height = round(scale_y * TARGET_IMAGE_SIZE)
         boxes_scaled[:, [0, 2]] = np.clip(boxes_scaled[:, [0, 2]], 0, width)
         boxes_scaled[:, [1, 3]] = np.clip(boxes_scaled[:, [1, 3]], 0, height)
         return boxes_scaled, scores, class_ids
 
 
-def collect_images(source_dir: Path) -> List[Path]:
+def collect_images(source_dir: Path) -> list[Path]:
     valid_suffixes = {".jpg", ".jpeg", ".png", ".bmp"}
-    images = sorted(
-        path for path in source_dir.iterdir() if path.is_file() and path.suffix.lower() in valid_suffixes
-    )
+    images = sorted(path for path in source_dir.iterdir() if path.is_file() and path.suffix.lower() in valid_suffixes)
     if not images:
         raise FileNotFoundError(f"No images found in {source_dir!s}")
     return images
@@ -164,7 +155,9 @@ def draw_detections(image: np.ndarray, boxes: np.ndarray, scores: np.ndarray, cl
     return annotated
 
 
-def save_detections_to_txt(output_image_path: Path, boxes: np.ndarray, scores: np.ndarray, class_ids: np.ndarray, image_shape: Tuple[int, int]) -> None:
+def save_detections_to_txt(
+    output_image_path: Path, boxes: np.ndarray, scores: np.ndarray, class_ids: np.ndarray, image_shape: tuple[int, int]
+) -> None:
     txt_path = output_image_path.with_suffix(".txt")
     height, width = image_shape
     with open(txt_path, "w", encoding="utf-8") as file:
@@ -173,9 +166,7 @@ def save_detections_to_txt(output_image_path: Path, boxes: np.ndarray, scores: n
             y_center = ((y1 + y2) / 2) / height
             w_norm = (x2 - x1) / width
             h_norm = (y2 - y1) / height
-            file.write(
-                f"{int(class_id)} {x_center:.6f} {y_center:.6f} {w_norm:.6f} {h_norm:.6f} {float(score):.6f}\n"
-            )
+            file.write(f"{int(class_id)} {x_center:.6f} {y_center:.6f} {w_norm:.6f} {h_norm:.6f} {float(score):.6f}\n")
 
 
 def process_directory(detector: ONNXDetector, source_dir: Path, output_dir: Path) -> None:
